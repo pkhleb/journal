@@ -38,3 +38,8 @@ __screenshots__/
 # Vite
 *.timestamp-*-*.mjs
 .env
+
+frontend/node_modules/
+frontend/dist/
+backend/journal.db
+.env
