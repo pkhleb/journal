@@ -2,6 +2,7 @@
   <div class="journal-wrap">
     <div class="journal-header">
       <h1 class="journal-title">journal</h1>
+			<router-link to="/inventory" class="nav-link">inventory</router-link>
       <span class="journal-date">{{ todayStr }}</span>
     </div>
 
@@ -185,4 +186,13 @@ textarea::placeholder { color: var(--color-text-muted); font-style: italic; }
   color: var(--color-text-muted); margin-bottom: 1.5rem;
 }
 .modal-actions { display: flex; gap: 12px; margin-top: 1rem; }
+
+.nav-link {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+	letter-spacing: 0.08em; text-transform: uppercase;
+	color: var(--color-text-muted); text-decoration: none;
+}
+
+.nav-link:hover { color: var(--color-text-primary); }
+
 </style>

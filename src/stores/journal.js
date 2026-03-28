@@ -1,11 +1,36 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const API = import.meta.env.VITE_API_URL ?? ''
+const API = import.meta.env.VITE_API_URL ?? '/api/'
 
 export const useJournalStore = defineStore('journal', () => {
   const entries = ref([])
   const loading = ref(false)
+	const inventoryItems = ref([])
+
+	async function fetchInventory() {
+		const res = await fetch(`${API}/inventory`)
+		inventoryItems.value = await res.json()
+	}
+
+	async function createInventoryItem(name, items) {
+		await fetch(`${API}/inventory`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({name,items})
+		})
+		await fetchInventory()
+	}
+
+	async function deleteInventoryItem(id) {
+		await fetch(`${API}/inventory/${id}`, { method: 'DELETE' })
+		await fetchInventory()
+	}
+
+	async function consumeInventoryItem(id) {
+		await fetch(`${API}/inventory/${id}/consume`, { method: 'POST' })
+		await fetchInventory()
+	}
 
   async function fetchEntries() {
     loading.value = true
@@ -46,5 +71,9 @@ export const useJournalStore = defineStore('journal', () => {
     await fetchEntries()
   }
 
-  return { entries, loading, API, fetchEntries, submitEntry, deleteEntry, updateEntry }
+  return { 
+		entries, loading, API, 
+		fetchEntries, submitEntry, deleteEntry, updateEntry,
+		inventoryItems, fetchInventory, createInventoryItem, deleteInventoryItem, consumeInventoryItem
+	}
 })
