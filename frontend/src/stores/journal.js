@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
 const API = import.meta.env.VITE_API_URL ?? '/api/'
 
@@ -87,7 +87,7 @@ export const useJournalStore = defineStore('journal', () => {
   }
 
   return { 
-		entries, loading, API, 
+		entries, loading, API, foodLibrary,
 		fetchEntries, submitEntry, deleteEntry, updateEntry,
 		inventoryItems, fetchInventory, createInventoryItem, deleteInventoryItem, consumeInventoryItem
 	}

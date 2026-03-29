@@ -9,6 +9,7 @@
       <template v-if="entry.metric_type === 'meal'">
         <div v-for="item in entry.metric_data.items" :key="item.name" class="metric-chip">
           <span>item</span>{{ item.name }}
+          <template v-if="item.calories != null"><span style="margin-left:6px;">qty</span>{{ item.qty }}</template>
           <template v-if="item.calories != null"><span style="margin-left:6px;">cal</span>{{ item.calories }}</template>
           <template v-if="item.protein != null"><span style="margin-left:6px;">pro</span>{{ item.protein }}</template>
         </div>
