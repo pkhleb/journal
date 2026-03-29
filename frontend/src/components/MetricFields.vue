@@ -39,15 +39,20 @@
               v-model="row.name"
               :options="knownFoodItems"
               placeholder="e.g. chicken"
+							@update:modelValu="onFoodNameSelected(i)"
             />
           </div>
+					<div class="metric-field-row">
+						<label>qty</label>
+						<input type="number" v-model="row.qty" placeholder="1.0" step="any" @input="onQtyChanged(i)" />
+					</div>
           <div class="metric-field-row">
             <label>calories</label>
-            <input type="number" v-model="row.calories" placeholder="0" step="any" />
+            <input type="number" v-model="row.calories" placeholder="0" step="any" @change="onNutritionChanged(i, 'calories')"/>
           </div>
           <div class="metric-field-row">
             <label>protein</label>
-            <input type="number" v-model="row.protein" placeholder="0" step="any" />
+            <input type="number" v-model="row.protein" placeholder="0" step="any" @change="onNutritionChanged(i, 'protein')"/>
           </div>
         </div>
         <button v-if="mealRows.length > 1" class="meal-remove-btn" @click="removeMealRow(i)">remove</button>
@@ -77,19 +82,64 @@ const METRIC_TYPES = {
 
 const selectedType = ref('')
 const fieldValues  = ref({})
-const mealRows     = ref([{ name: '', calories: '', protein: '' }])
+const mealRows     = ref([{ name: '', qty: '', calories: '', protein: '' }])
 
 function onTypeChange() {
   fieldValues.value = {}
-  mealRows.value = [{ name: '', calories: '', protein: '' }]
+  mealRows.value = [{ name: '', qty: '', calories: '', protein: '' }]
 }
 
 function addMealRow() {
-  mealRows.value.push({ name: '', calories: '', protein: '' })
+  mealRows.value.push({ name: '', qty: '', calories: '', protein: '' })
 }
 
 function removeMealRow(i) {
   mealRows.value.splice(i, 1)
+}
+
+function onFoodNameSelected(i) {
+	const row = mealRows.value[i]
+	const known = store.foodLibrary[row.name]
+	if (!known) return
+	const qty = parseFloat(row.qty) || 1
+	if (known.cal_per_unit != null) row.calories = parseFloat((known.cal_per_unit * qty).toFixed(1))
+	if (known.pro_per_unit != null) row.protein = parseFloat((known.pro_per_unit * qty).toFixed(1))
+}
+
+function onQtyChanged(i) {
+	const row = mealRows.value[i]
+	const known = store.foodLibrary[row.name]
+	if (!known) return
+	const qty = parseFloat(row.qty)
+	if (isNaN(qty) || qty <= 0) return
+	if (known.cal_per_unit != null) row.calories = parseFloat((known.cal_per_unit * qty).toFixed(1))
+	if (known.pro_per_unit != null) row.protein = parseFloat((known.pro_per_unit * qty).toFixed(1))
+}
+
+function onNutritionChanged(i, field) {
+	const row = mealRows.value[i]
+	const known = store.foodLibrary[row.name]
+	if (!known || !row.qty) return
+
+	const qty = parseFloat(row.qty)
+	const newVal = parseFloat(row[field])
+	if (isNaN(qty) || isNaN(newVal)) return
+
+	const storedVal = field === 'calories'
+		? known.cal_per_unit * qty
+		: known.pro_per_unit * qty
+
+	if (Math.abs(newVal - storedVal) < 0.5) return
+
+	const update = confirm(
+		`"${row.name}" has stored ${field} of ${storedVal.toFixed(1)} for qty ${qty}.\n\nYou entered ${newVal}. Update stored values?`
+	)
+
+	if (update) {
+		const perUnit = newVal / qty
+		if (field === 'calories') known.cal_per_unit = perUnit
+		else known.pro_per_unit = perUnit
+	}
 }
 
 function comboOptions(type, field) {
@@ -116,6 +166,7 @@ function collect() {
       .filter(r => r.name || r.calories || r.protein)
       .map(r => ({
         name:     r.name     || null,
+				qty: 			r.qty      !== '' ? parseFloat(r.qty)      : null,
         calories: r.calories !== '' ? parseFloat(r.calories) : null,
         protein:  r.protein  !== '' ? parseFloat(r.protein)  : null
       }))

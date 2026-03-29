@@ -21,6 +21,10 @@
               placeholder="e.g. chicken"
             />
           </div>
+					<div class="metric-field-row">
+						<label>qty</label>
+            <input type="number" v-model="row.qty" placeholder="1.0" step="any" />
+					</div>
           <div class="metric-field-row">
             <label>calories</label>
             <input type="number" v-model="row.calories" placeholder="0" step="any" />
@@ -80,7 +84,7 @@ import Combobox from '../components/Combobox.vue'
 const store = useJournalStore()
 
 const mealName = ref('')
-const rows = ref([{ name: '', calories: '', protein: '' }])
+const rows = ref([{ name: '', qty: '', calories: '', protein: '' }])
 const toastVisible = ref(false)
 
 onMounted(() => {
@@ -97,7 +101,7 @@ const knownFoodItems = computed(() =>
 )
 
 function addRow() {
-  rows.value.push({ name: '', calories: '', protein: '' })
+  rows.value.push({ name: '', qty: '', calories: '', protein: '' })
 }
 
 function removeRow(i) {
@@ -113,6 +117,7 @@ async function save() {
     .filter(r => r.name || r.calories || r.protein)
     .map(r => ({
       name:     r.name || null,
+			qty:      r.qty      !== '' ? parseFloat(r.calories) : null,
       calories: r.calories !== '' ? parseFloat(r.calories) : null,
       protein:  r.protein  !== '' ? parseFloat(r.protein)  : null
     }))
