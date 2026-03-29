@@ -8,6 +8,21 @@ export const useJournalStore = defineStore('journal', () => {
   const loading = ref(false)
 	const inventoryItems = ref([])
 
+	const foodLibrary = computed(() => {
+		const library = {}
+		entries.value
+			.filter(e => e.metric_type === 'meal' && e.metric_data?.items)
+			.flatMap(e => e.metric_data.items)
+			.forEach(item => {
+				if (!item.name || !item.qty) return
+				library[item.name] = {
+					cal_per_unit: item.calories != null ? item.calories / item.qty : null,
+					pro_per_unit: item.protein != null ? item.protein / item.qty : null
+				}
+			})
+		return library
+	})
+
 	async function fetchInventory() {
 		const res = await fetch(`${API}/inventory`)
 		inventoryItems.value = await res.json()
