@@ -132,6 +132,7 @@ async function save() {
 
 async function consume(id) {
   await store.consumeInventoryItem(id)
+	await store.deleteInventoryItem(id)
   toastVisible.value = true
   setTimeout(() => toastVisible.value = false, 1800)
 }
