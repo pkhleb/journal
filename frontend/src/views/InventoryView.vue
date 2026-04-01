@@ -19,19 +19,20 @@
               v-model="row.name"
               :options="knownFoodItems"
               placeholder="e.g. chicken"
+							@update:modelValue="onFoodNameSelected(i)"
             />
           </div>
 					<div class="metric-field-row">
 						<label>qty</label>
-            <input type="number" v-model="row.qty" placeholder="1.0" step="any" />
+            <input type="number" v-model="row.qty" placeholder="1.0" @input = "onQtyChanged(i)" step="any" />
 					</div>
           <div class="metric-field-row">
             <label>calories</label>
-            <input type="number" v-model="row.calories" placeholder="0" step="any" />
+            <input type="number" v-model="row.calories" placeholder="0" step="any" @change="onNutritionChanged(i, 'calories')"/>
           </div>
           <div class="metric-field-row">
             <label>protein</label>
-            <input type="number" v-model="row.protein" placeholder="0" step="any" />
+            <input type="number" v-model="row.protein" placeholder="0" step="any" @change="onNutritionChanged(i, 'protein')"/>
           </div>
         </div>
         <button v-if="rows.length > 1" class="meal-remove-btn" @click="removeRow(i)">remove</button>
@@ -80,11 +81,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useJournalStore } from '../stores/journal'
 import Combobox from '../components/Combobox.vue'
+import { useMealRows } from '../composables/useMealRows'
+
+const { rows, addRow, removeRow, onFoodNameSelected, onQtyChanged, onNutritionChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
 
 const store = useJournalStore()
 
 const mealName = ref('')
-const rows = ref([{ name: '', qty: '', calories: '', protein: '' }])
 const toastVisible = ref(false)
 
 onMounted(() => {
@@ -100,32 +103,13 @@ const knownFoodItems = computed(() =>
   )]
 )
 
-function addRow() {
-  rows.value.push({ name: '', qty: '', calories: '', protein: '' })
-}
-
-function removeRow(i) {
-  rows.value.splice(i, 1)
-}
-
-
 async function save() {
-	console.log('mealName:', mealName.value)
-	console.log('rows:', JSON.stringify(rows.value))
   if (!mealName.value.trim()) return
-  const items = rows.value
-    .filter(r => r.name || r.calories || r.protein)
-    .map(r => ({
-      name:     r.name || null,
-			qty:      r.qty      !== '' ? parseFloat(r.calories) : null,
-      calories: r.calories !== '' ? parseFloat(r.calories) : null,
-      protein:  r.protein  !== '' ? parseFloat(r.protein)  : null
-    }))
-  if (!items.length) return
-	console.log('sending:', JSON.stringify({name: mealName.value.trim(), items }))
+  const items = collectMeal()
+  if (!items) return
   await store.createInventoryItem(mealName.value.trim(), items)
   mealName.value = ''
-  rows.value = [{ name: '', calories: '', protein: '' }]
+	resetMeal()
   toastVisible.value = true
   setTimeout(() => toastVisible.value = false, 1800)
 }

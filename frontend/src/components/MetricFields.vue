@@ -39,7 +39,7 @@
               v-model="row.name"
               :options="knownFoodItems"
               placeholder="e.g. chicken"
-							@update:modelValu="onFoodNameSelected(i)"
+							@update:modelValue="onFoodNameSelected(i)"
             />
           </div>
 					<div class="metric-field-row">
@@ -67,6 +67,7 @@
 import { ref, computed } from 'vue'
 import { useJournalStore } from '../stores/journal'
 import Combobox from './Combobox.vue'
+import { useMealRows } from '../composables/useMealRows'
 
 const store = useJournalStore()
 
@@ -82,64 +83,12 @@ const METRIC_TYPES = {
 
 const selectedType = ref('')
 const fieldValues  = ref({})
-const mealRows     = ref([{ name: '', qty: '', calories: '', protein: '' }])
+const { rows: mealRows, addRow: addMealRow, removeRow: removeMealRow,
+				onFoodNameSelected, onQtyChanged, onNutritionChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
 
 function onTypeChange() {
-  fieldValues.value = {}
-  mealRows.value = [{ name: '', qty: '', calories: '', protein: '' }]
-}
-
-function addMealRow() {
-  mealRows.value.push({ name: '', qty: '', calories: '', protein: '' })
-}
-
-function removeMealRow(i) {
-  mealRows.value.splice(i, 1)
-}
-
-function onFoodNameSelected(i) {
-	const row = mealRows.value[i]
-	const known = store.foodLibrary[row.name]
-	if (!known) return
-	const qty = parseFloat(row.qty) || 1
-	if (known.cal_per_unit != null) row.calories = parseFloat((known.cal_per_unit * qty).toFixed(1))
-	if (known.pro_per_unit != null) row.protein = parseFloat((known.pro_per_unit * qty).toFixed(1))
-}
-
-function onQtyChanged(i) {
-	const row = mealRows.value[i]
-	const known = store.foodLibrary[row.name]
-	if (!known) return
-	const qty = parseFloat(row.qty)
-	if (isNaN(qty) || qty <= 0) return
-	if (known.cal_per_unit != null) row.calories = parseFloat((known.cal_per_unit * qty).toFixed(1))
-	if (known.pro_per_unit != null) row.protein = parseFloat((known.pro_per_unit * qty).toFixed(1))
-}
-
-function onNutritionChanged(i, field) {
-	const row = mealRows.value[i]
-	const known = store.foodLibrary[row.name]
-	if (!known || !row.qty) return
-
-	const qty = parseFloat(row.qty)
-	const newVal = parseFloat(row[field])
-	if (isNaN(qty) || isNaN(newVal)) return
-
-	const storedVal = field === 'calories'
-		? known.cal_per_unit * qty
-		: known.pro_per_unit * qty
-
-	if (Math.abs(newVal - storedVal) < 0.5) return
-
-	const update = confirm(
-		`"${row.name}" has stored ${field} of ${storedVal.toFixed(1)} for qty ${qty}.\n\nYou entered ${newVal}. Update stored values?`
-	)
-
-	if (update) {
-		const perUnit = newVal / qty
-		if (field === 'calories') known.cal_per_unit = perUnit
-		else known.pro_per_unit = perUnit
-	}
+	fieldValues.value = {}
+	resetMeal()
 }
 
 function comboOptions(type, field) {
@@ -160,19 +109,10 @@ const knownFoodItems = computed(() =>
 
 function collect() {
   if (!selectedType.value) return { type: null, data: null }
-
   if (selectedType.value === 'meal') {
-    const items = mealRows.value
-      .filter(r => r.name || r.calories || r.protein)
-      .map(r => ({
-        name:     r.name     || null,
-				qty: 			r.qty      !== '' ? parseFloat(r.qty)      : null,
-        calories: r.calories !== '' ? parseFloat(r.calories) : null,
-        protein:  r.protein  !== '' ? parseFloat(r.protein)  : null
-      }))
-    return items.length ? { type: 'meal', data: { items } } : { type: null, data: null }
+    const items = collectMeal()
+    return items ? { type: 'meal', data: { items } } : { type: null, data: null }
   }
-
   const data = {}
   let hasValue = false
   METRIC_TYPES[selectedType.value].forEach(field => {
@@ -188,7 +128,7 @@ function collect() {
 function reset() {
   selectedType.value = ''
   fieldValues.value  = {}
-  mealRows.value     = [{ name: '', calories: '', protein: '' }]
+	resetMeal()
 }
 
 defineExpose({ collect, reset })
