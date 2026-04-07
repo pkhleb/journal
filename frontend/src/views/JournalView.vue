@@ -3,6 +3,7 @@
     <div class="journal-header">
       <h1 class="journal-title">journal</h1>
 			<router-link to="/inventory" class="nav-link">inventory</router-link>
+			<router-link to="/analytics" class="nav-link">analytics</router-link>
       <span class="journal-date">{{ todayStr }}</span>
     </div>
 
@@ -80,7 +81,7 @@ const todaysSummary = computed(() => {
 
 	todaysEntries.forEach(e => {
 		if (e.metric_type === 'meal' && e.metric_data?.items) {
-			e.metric_date.items.forEach(item => {
+			e.metric_data.items.forEach(item => {
 				calories += item.calories || 0
 				protein += item.protein || 0
 			})
