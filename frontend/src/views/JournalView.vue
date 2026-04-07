@@ -6,6 +6,10 @@
       <span class="journal-date">{{ todayStr }}</span>
     </div>
 
+		<div v-if="todaysSummary.calories > 0 || todaysSummary.protein > 0" class="daily-summary">
+			<span>today</span>
+			<span>{{ todaysSummary.calories }} cal · {{ todaysSummary.protein }}g protein</span>
+		</div>
     <div class="field-group">
       <label class="field-label">entry</label>
       <textarea
@@ -53,7 +57,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useJournalStore } from '../stores/journal'
 import MetricFields from '../components/MetricFields.vue'
 import EntryCard from '../components/EntryCard.vue'
@@ -65,6 +69,26 @@ const metricFields = ref(null)
 const editingEntry = ref(null)
 const editProse = ref('')
 const editMetricFields = ref(null)
+
+const todaysSummary = computed(() => {
+	const today = new Date().toDateString()
+	const todaysEntries = store.entries.filter( e =>
+		new Date(e.created_at + 'Z').toDateString() === today
+	)
+	let calories = 0
+	let protein = 0
+
+	todaysEntries.forEach(e => {
+		if (e.metric_type === 'meal' && e.metric_data?.items) {
+			e.metric_date.items.forEach(item => {
+				calories += item.calories || 0
+				protein += item.protein || 0
+			})
+		}
+	})
+
+	return { calories: Math.round(calories), protein: Math.round(protein) }
+})
 
 const todayStr = new Date().toLocaleDateString('en-US', {
   weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
@@ -124,6 +148,16 @@ function exportDb() {
   font-family: 'DM Mono', monospace; font-size: 11px;
   color: var(--color-text-muted); letter-spacing: 0.08em;
   text-transform: uppercase; margin-left: auto;
+}
+.daily-summary {
+	display: flex;
+	justify-content: space-between;
+	font-family: 'DM Mono', monospace;
+	font-size: 12px;
+	color: var(--color-text-muted);
+	margin-bottom: 1.5rem;
+	padding-bottom: 1rem;
+	border-bottom: 0.5px solid var(--color-border);
 }
 .field-group { margin-bottom: 1.5rem; }
 .field-label {
