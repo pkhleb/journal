@@ -58,7 +58,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useJournalStore } from '../stores/journal'
 import MetricFields from '../components/MetricFields.vue'
 import EntryCard from '../components/EntryCard.vue'
@@ -112,9 +112,13 @@ async function deleteEntry(id) {
   await store.deleteEntry(id)
 }
 
-function startEdit(entry) {
+async function startEdit(entry) {
   editingEntry.value = entry
   editProse.value = entry.prose || ''
+	await nextTick()
+	if (entry.metric_type && entry.metric_data) {
+		editMetricFields.value.populate(entry.metric_type, entry.metric_data)
+	}
 }
 
 function cancelEdit() {

@@ -86,6 +86,31 @@ const fieldValues  = ref({})
 const { rows: mealRows, addRow: addMealRow, removeRow: removeMealRow,
 				onFoodNameSelected, onQtyChanged, onNutritionChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
 
+function populate(type, data) {
+	if (!type || !data) return
+	selectedType.value = type
+
+	if (type === 'meal' && data.items) {
+		mealRows.value = data.items.map(item => ({
+			name:     item.name     || '',
+			qty:      item.qty      ?? '',
+			calories: item.calories ?? '',
+			protein:  item.protein ?? ''
+		}))
+	  return
+	}
+
+	const fields = METRIC_TYPES[type]
+	if (!fields) return
+	fields.forEach(field => {
+		if (data[field.key] != null) {
+			fieldValues.value[field.key] = data[field.key]
+		}
+	})
+}
+
+defineExpose({ collect, reset, populate })
+
 function onTypeChange() {
 	fieldValues.value = {}
 	resetMeal()
@@ -131,7 +156,6 @@ function reset() {
 	resetMeal()
 }
 
-defineExpose({ collect, reset })
 </script>
 
 <style scoped>
