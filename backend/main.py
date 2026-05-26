@@ -21,7 +21,7 @@ class Entry(BaseModel):
 async def update_entry(entry_id: int, entry: Entry):
     async with aiosqlite.connect(DB) as db:
         await db.execute(
-            "UPDATE entries SET prose=?, metric_type=?, metric_data=?, WHERE id=?",
+            "UPDATE entries SET prose=?, metric_type=?, metric_data=? WHERE id=?",
             (entry.prose, entry.metric_type, json.dumps(entry.metric_data) if entry.metric_data else None, entry_id)
         )
         await db.commit()
