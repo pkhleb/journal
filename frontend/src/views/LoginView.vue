@@ -82,12 +82,10 @@ async function submit() {
     }
 
     const { access_token } = await res.json()
-		console.log('token:', access_token)
     // Fetch user info
     const meRes = await fetch('/api/users/me', {
       headers: { Authorization: `Bearer ${access_token}` }
     })
-		console.log('me status:', meRes.status)
     const user = await meRes.json()
 
     auth.setAuth(access_token, user)
