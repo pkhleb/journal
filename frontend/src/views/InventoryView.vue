@@ -116,7 +116,6 @@ async function save() {
 
 async function consume(id) {
   await store.consumeInventoryItem(id)
-	await store.deleteInventoryItem(id)
   toastVisible.value = true
   setTimeout(() => toastVisible.value = false, 1800)
 }
@@ -135,7 +134,7 @@ function totalProtein(item) {
 }
 
 function formatDate(ts) {
-  return new Date(ts + 'Z').toLocaleDateString('en-US', {
+  return new Date(ts).toLocaleDateString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric'
   })
 }

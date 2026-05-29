@@ -4,6 +4,7 @@
       <h1 class="journal-title">journal</h1>
 			<router-link to="/inventory" class="nav-link">inventory</router-link>
 			<router-link to="/analytics" class="nav-link">analytics</router-link>
+			<button class="nav-link" @click="logout" style="background:none;border:none;cursor:pointer;">logout</button>
       <span class="journal-date">{{ todayStr }}</span>
     </div>
 
@@ -62,6 +63,16 @@ import { ref, onMounted, computed, nextTick } from 'vue'
 import { useJournalStore } from '../stores/journal'
 import MetricFields from '../components/MetricFields.vue'
 import EntryCard from '../components/EntryCard.vue'
+import { useAuthStore } from '../stores/auth'
+import { useRouter } from 'vue-router'
+
+const authStore = useAuthStore()
+const router = useRouter()
+
+function logout() {
+	authStore.clearAuth()
+	router.push('/login')
+}
 
 const store = useJournalStore()
 const prose = ref('')
@@ -74,7 +85,7 @@ const editMetricFields = ref(null)
 const todaysSummary = computed(() => {
 	const today = new Date().toDateString()
 	const todaysEntries = store.entries.filter( e =>
-		new Date(e.created_at + 'Z').toDateString() === today
+		new Date(e.created_at).toDateString() === today
 	)
 	let calories = 0
 	let protein = 0

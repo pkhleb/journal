@@ -31,7 +31,7 @@ const weightData = computed(() =>
   store.entries
     .filter(e => e.metric_type === 'weight' && e.metric_data?.value != null)
     .map(e => ({
-      x: new Date(e.created_at + 'Z'),
+      x: new Date(e.created_at),
       y: e.metric_data.value
     }))
     .reverse()

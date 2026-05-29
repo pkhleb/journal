@@ -7,14 +7,41 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-.DS_Store
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build output
 dist
 dist-ssr
-coverage
+frontend/dist/
+
+# Environment
+.env
+*.env
 *.local
 
-# Editor directories and files
+# Database
+*.db
+*.sqlite
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Migration artifacts
+migrate.py
+
+# Testing
+coverage
+__screenshots__/
+/cypress/videos/
+/cypress/screenshots/
+
+# Editor
 .vscode/*
 !.vscode/extensions.json
 .idea
@@ -23,23 +50,9 @@ coverage
 *.njsproj
 *.sln
 *.sw?
-
 *.tsbuildinfo
-
 .eslintcache
-
-# Cypress
-/cypress/videos/
-/cypress/screenshots/
-
-# Vitest
-__screenshots__/
-
-# Vite
 *.timestamp-*-*.mjs
-.env
 
-frontend/node_modules/
-frontend/dist/
-backend/journal.db
-.env
+# OS
+.DS_Store

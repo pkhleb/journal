@@ -43,7 +43,7 @@ const props = defineProps({
 
 defineEmits(['edit', 'delete'])
 
-const d = computed(() => new Date(props.entry.created_at + 'Z'))
+const d = computed(() => new Date(props.entry.created_at))
 
 const dateStr = computed(() =>
   d.value.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
