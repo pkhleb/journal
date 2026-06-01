@@ -4,11 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app import models, schemas, auth
+from app.limiter import limiter
+from fastapi import Request
 
 router = APIRouter(prefix="/api/users")
 
 @router.post("/register", response_model=schemas.UserOut)
-async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, user: schemas.UserCreate, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(
         select(models.User).where(
             (models.User.email == user.email) | (models.User.username == user.username)
@@ -27,7 +30,9 @@ async def register(user: schemas.UserCreate, db: AsyncSession = Depends(get_db))
     return db_user
 
 @router.post("/login", response_model=schemas.Token)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db)
 ):
