@@ -15,6 +15,8 @@ class User(Base):
         created_at      = Column(DateTime(timezone=True), server_default=func.now())
         entries         = relationship("Entry", back_populates="user")
         inventory       = relationship("InventoryItem", back_populates="user")
+        failed_login_attempts = Column(Integer, default=0)
+        locked_until          = Column(DateTime(timezone=True), nullable=True)
 
 class Entry(Base):
         __tablename__ = "entries"

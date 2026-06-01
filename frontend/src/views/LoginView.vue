@@ -77,7 +77,8 @@ async function submit() {
     })
 
     if (!res.ok) {
-      error.value = 'Incorrect email or password'
+		  const data = await res.json()
+      error.value = data.detail || 'Incorrect email or password'
       return
     }
 
