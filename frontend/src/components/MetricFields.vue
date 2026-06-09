@@ -19,6 +19,7 @@
           v-model="fieldValues[field.key]"
           :options="comboOptions(selectedType, field.key)"
           :placeholder="field.placeholder"
+					@update:modelValue="onExerciseNameChange"
         />
         <input
           v-else
@@ -70,6 +71,7 @@ import Combobox from './Combobox.vue'
 import { useMealRows } from '../composables/useMealRows'
 
 const store = useJournalStore()
+const emit = defineEmits(['exerciseFilter'])
 
 const METRIC_TYPES = {
   weight:        [{ key: 'value',    label: 'kg',       type: 'number', placeholder: '0.0' }],
@@ -114,6 +116,13 @@ defineExpose({ collect, reset, populate })
 function onTypeChange() {
 	fieldValues.value = {}
 	resetMeal()
+	emit('exerciseFilter', '')
+}
+
+function onExerciseNameChange(val) {
+	if (selectedType.value === 'exercise') {
+		emit('exerciseFilter', val)
+	}
 }
 
 function comboOptions(type, field) {

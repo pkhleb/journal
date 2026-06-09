@@ -22,7 +22,7 @@
       />
     </div>
 
-    <MetricFields ref="metricFields" />
+    <MetricFields ref="metricFields" @exerciseFilter="exerciseFilter = $event" />
 
     <div class="submit-row">
       <button class="submit-btn" @click="submit">Save entry</button>
@@ -33,7 +33,7 @@
     <div v-if="store.entries.length" class="entries-section">
       <p class="entries-title">entries</p>
       <EntryCard
-        v-for="entry in store.entries"
+        v-for="entry in filteredEntries"
         :key="entry.id"
         :entry="entry"
         @edit="startEdit"
@@ -68,6 +68,15 @@ import { useRouter } from 'vue-router'
 
 const authStore = useAuthStore()
 const router = useRouter()
+
+const exerciseFilter = ref('')
+
+const filteredEntries = computed(() => {
+	if (!exerciseFilter.value) return store.entries
+	return store.entries.filter(e =>
+		e.metric_type === 'exercise' &&
+		e.metric_data?.name?.toLowerCase().includes(exerciseFilter.value.toLowerCase()))
+})
 
 function logout() {
 	authStore.clearAuth()
@@ -114,6 +123,7 @@ async function submit() {
   await store.submitEntry(prose.value.trim(), type, data)
   prose.value = ''
   metricFields.value.reset()
+	exerciseFilter.value = ''
   toastVisible.value = true
   setTimeout(() => toastVisible.value = false, 1800)
 }
