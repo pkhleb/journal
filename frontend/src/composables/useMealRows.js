@@ -45,7 +45,7 @@ export function useMealRows() {
 			.filter(r => r.name || r.calories || r.protein)
 			.map(r => ({
 				name: 		r.name     || null,
-				qty:      r.qty      !== '' ? parseFloat(r.qty)      : null,
+				qty:      r.qty      !== '' ? parseFloat(r.qty)      : (r.calories !== '' || r.protein !== '' ? 1 : null),
 				calories: r.calories !== '' ? parseFloat(r.calories) : null,
 				protein:  r.protein  !== '' ? parseFloat(r.protein)  : null
 			}))
