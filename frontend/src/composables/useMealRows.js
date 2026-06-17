@@ -21,10 +21,13 @@ export function useMealRows() {
 	function onFoodNameSelected(i) {
 		const row = rows.value[i]
 		const known = store.foodLibrary[row.name]
+		console.log('onFoodNameSelected - row:', JSON.stringify(row), 'known:', JSON.stringify(known))
 		if (!known) return
 		const qty = parseFloat(row.qty) || 1
+		row.qty = qty
 		if (known.cal_per_unit != null) row.calories = parseFloat((known.cal_per_unit * qty).toFixed(1))
 		if (known.pro_per_unit != null) row.protein = parseFloat((known.pro_per_unit * qty).toFixed(1))
+		console.log('after calc - row:', JSON.stringify(row))
 	}
 
 	function onQtyChanged(i) {
@@ -37,28 +40,6 @@ export function useMealRows() {
 		if (known.pro_per_unit != null) row.protein = parseFloat((known.pro_per_unit * qty).toFixed(1))
 	}
 
-	function onNutritionChanged(i, field) {
-		const row = rows.value[i]
-		const known = store.foodLibrary[row.name]
-		if (!known || !row.qty) return
-		const qty = parseFloat(row.qty)
-		const newVal = parseFloat(row[field])
-		if (isNaN(qty) || isNaN(newVal)) return
-		const storedVal = field === 'calories'
-			? known.cal_per_unit * qty
-			: known.pro_per_unit * qty
-		if (Math.abs(newVal - storedVal) < 0.5) return
-		const update = confirm(
-			`"${row.name}" has stored ${field} of ${storedVal.toFixed(1)} for qty ${qty},\n\nYou entered ${newVal}. Update stored values?`
-		)
-		if (update) {
-			const perUnit = newVal / qty
-			if (field === 'calories') known.cal_per_unit = perUnit
-			else known.pro_per_unit = perUnit
-		}
-	}
-
-
 	function collect() {
 		const items = rows.value
 			.filter(r => r.name || r.calories || r.protein)
@@ -68,6 +49,7 @@ export function useMealRows() {
 				calories: r.calories !== '' ? parseFloat(r.calories) : null,
 				protein:  r.protein  !== '' ? parseFloat(r.protein)  : null
 			}))
+		console.log('collect - rows:', JSON.stringify(rows.value), 'items:', JSON.stringify(items))
 		return items.length ? items : null
 	}
 
@@ -78,7 +60,6 @@ export function useMealRows() {
 		reset,
 		onFoodNameSelected,
 		onQtyChanged,
-		onNutritionChanged,
 		collect
 	}
 }

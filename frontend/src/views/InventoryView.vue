@@ -28,11 +28,11 @@
 					</div>
           <div class="metric-field-row">
             <label>calories</label>
-            <input type="number" v-model="row.calories" placeholder="0" step="any" @change="onNutritionChanged(i, 'calories')"/>
+            <input type="number" v-model="row.calories" placeholder="0" step="any" />
           </div>
           <div class="metric-field-row">
             <label>protein</label>
-            <input type="number" v-model="row.protein" placeholder="0" step="any" @change="onNutritionChanged(i, 'protein')"/>
+            <input type="number" v-model="row.protein" placeholder="0" step="any" />
           </div>
         </div>
         <button v-if="rows.length > 1" class="meal-remove-btn" @click="removeRow(i)">remove</button>
@@ -83,7 +83,7 @@ import { useJournalStore } from '../stores/journal'
 import Combobox from '../components/Combobox.vue'
 import { useMealRows } from '../composables/useMealRows'
 
-const { rows, addRow, removeRow, onFoodNameSelected, onQtyChanged, onNutritionChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
+const { rows, addRow, removeRow, onFoodNameSelected, onQtyChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
 
 const store = useJournalStore()
 

@@ -49,11 +49,11 @@
 					</div>
           <div class="metric-field-row">
             <label>calories</label>
-            <input type="number" v-model="row.calories" placeholder="0" step="any" @change="onNutritionChanged(i, 'calories')"/>
+            <input type="number" v-model="row.calories" placeholder="0" step="any" />
           </div>
           <div class="metric-field-row">
             <label>protein</label>
-            <input type="number" v-model="row.protein" placeholder="0" step="any" @change="onNutritionChanged(i, 'protein')"/>
+            <input type="number" v-model="row.protein" placeholder="0" step="any" />
           </div>
         </div>
         <button v-if="mealRows.length > 1" class="meal-remove-btn" @click="removeMealRow(i)">remove</button>
@@ -86,7 +86,7 @@ const METRIC_TYPES = {
 const selectedType = ref('')
 const fieldValues  = ref({})
 const { rows: mealRows, addRow: addMealRow, removeRow: removeMealRow,
-				onFoodNameSelected, onQtyChanged, onNutritionChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
+				onFoodNameSelected, onQtyChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
 
 function populate(type, data) {
 	if (!type || !data) return

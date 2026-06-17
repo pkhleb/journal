@@ -11,8 +11,11 @@ export const useJournalStore = defineStore('journal', () => {
 
 	const foodLibrary = computed(() => {
 		const library = {}
-		entries.value
+		const mealEntries = entries.value
 			.filter(e => e.metric_type === 'meal' && e.metric_data?.items)
+		  .slice()
+		  .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+		mealEntries
 			.flatMap(e => e.metric_data.items)
 			.forEach(item => {
 				if (!item.name || !item.qty) return
