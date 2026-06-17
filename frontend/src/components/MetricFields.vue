@@ -74,11 +74,11 @@ const store = useJournalStore()
 const emit = defineEmits(['exerciseFilter'])
 
 const METRIC_TYPES = {
-  weight:        [{ key: 'value',    label: 'kg',       type: 'number', placeholder: '0.0' }],
+  weight:        [{ key: 'value',    label: 'lb',       type: 'number', placeholder: '0.0' }],
   sleep_quality: [{ key: 'value',    label: 'quality',  type: 'number', placeholder: '1–5' }],
   exercise: [
     { key: 'name',   label: 'name', type: 'text',   placeholder: 'e.g. squat', combobox: true },
-    { key: 'weight', label: 'kg',   type: 'number', placeholder: '0.0' },
+    { key: 'weight', label: 'lbs',   type: 'number', placeholder: '0.0' },
     { key: 'reps',   label: 'reps', type: 'number', placeholder: '0' }
   ]
 }

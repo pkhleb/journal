@@ -1,0 +1,3 @@
+#!/bin/bash
+npm run build
+scp -r dist/* journal@journal.pkhleb.com:~/journal-app/static/

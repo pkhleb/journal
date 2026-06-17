@@ -22,7 +22,7 @@ export function useMealRows() {
 		const row = rows.value[i]
 		const known = store.foodLibrary[row.name]
 		if (!known) return
-		const qty = parseFloat(row.qt) || 1
+		const qty = parseFloat(row.qty) || 1
 		if (known.cal_per_unit != null) row.calories = parseFloat((known.cal_per_unit * qty).toFixed(1))
 		if (known.pro_per_unit != null) row.protein = parseFloat((known.pro_per_unit * qty).toFixed(1))
 	}
@@ -37,7 +37,7 @@ export function useMealRows() {
 		if (known.pro_per_unit != null) row.protein = parseFloat((known.pro_per_unit * qty).toFixed(1))
 	}
 
-	function onNutritionChanged(i) {
+	function onNutritionChanged(i, field) {
 		const row = rows.value[i]
 		const known = store.foodLibrary[row.name]
 		if (!known || !row.qty) return
