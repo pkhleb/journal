@@ -21,7 +21,8 @@ export const useJournalStore = defineStore('journal', () => {
 				if (!item.name || !item.qty) return
 				library[item.name] = {
 					cal_per_unit: item.calories != null ? item.calories / item.qty : null,
-					pro_per_unit: item.protein != null ? item.protein / item.qty : null
+					pro_per_unit: item.protein != null ? item.protein / item.qty : null,
+					caf_per_unit: item.caffeine != null ? item.caffeine / item.qty : null
 				}
 			})
 		return library

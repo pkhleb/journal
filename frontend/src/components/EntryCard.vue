@@ -12,10 +12,12 @@
           <template v-if="item.qty != null"><span style="margin-left:6px;">qty</span>{{ item.qty }}</template>
           <template v-if="item.calories != null"><span style="margin-left:6px;">cal</span>{{ item.calories }}</template>
           <template v-if="item.protein != null"><span style="margin-left:6px;">pro</span>{{ item.protein }}</template>
+					<template v-if="item.caffeine != null"><span style="margin-left:6px;">caf</span>{{ item.caffeine }}</template>
         </div>
         <div class="metric-chip totals">
           <span>total cal</span>{{ totalCalories }}
           <span style="margin-left:6px;">pro</span>{{ totalProtein }}
+					<span style="margin-left:6px;">caf</span>{{ totalCaffeine }}
         </div>
       </template>
       <template v-else>
@@ -57,6 +59,9 @@ const totalCalories = computed(() =>
 )
 const totalProtein = computed(() =>
   props.entry.metric_data?.items?.reduce((s, i) => s + (i.protein || 0), 0) ?? 0
+)
+const totalCaffeine = computed(() =>
+	props.entry.metric_data?.items?.reduce((s, i) => s + (i.caffeine || 0), 0 ) ?? 0
 )
 </script>
 

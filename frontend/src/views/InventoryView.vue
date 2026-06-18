@@ -34,6 +34,10 @@
             <label>protein</label>
             <input type="number" v-model="row.protein" placeholder="0" step="any" />
           </div>
+					<div class="metric-field-row">
+						<label>caffeine</label>
+						<input type="number" v-model="row.caffeine" placeholder="0" step="any" />
+					</div>
         </div>
         <button v-if="rows.length > 1" class="meal-remove-btn" @click="removeRow(i)">remove</button>
         <div v-if="i < rows.length - 1" class="meal-divider" />
@@ -58,10 +62,12 @@
             <span>item</span>{{ food.name }}
             <template v-if="food.calories != null"><span style="margin-left:6px;">cal</span>{{ food.calories }}</template>
             <template v-if="food.protein != null"><span style="margin-left:6px;">pro</span>{{ food.protein }}</template>
+						<template v-if="food.caffeine != null"><span style="margin-left:6px;">caf</span>{{ food.caffeine }}</template>
           </div>
           <div class="metric-chip totals">
             <span>total cal</span>{{ totalCalories(item) }}
             <span style="margin-left:6px;">pro</span>{{ totalProtein(item) }}
+						<span style="margin-left:6px;">caf</span>{{ totalCaffeine(item) }}
           </div>
         </div>
         <div class="entry-actions">
@@ -131,6 +137,10 @@ function totalCalories(item) {
 
 function totalProtein(item) {
   return item.items.reduce((s, i) => s + (i.protein || 0), 0)
+}
+
+function totalCaffeine(item) {
+	return item.items.reduce((s, i) => s + (i.caffeine || 0), 0)
 }
 
 function formatDate(ts) {

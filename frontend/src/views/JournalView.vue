@@ -8,9 +8,9 @@
       <span class="journal-date">{{ todayStr }}</span>
     </div>
 
-		<div v-if="todaysSummary.calories > 0 || todaysSummary.protein > 0" class="daily-summary">
+		<div v-if="todaysSummary.calories > 0 || todaysSummary.protein > 0 || todaysSummary.caffeine > 0" class="daily-summary">
 			<span>today</span>
-			<span>{{ todaysSummary.calories }} cal · {{ todaysSummary.protein }}g protein</span>
+			<span>{{ todaysSummary.calories }} cal · {{ todaysSummary.protein }}g protein · {{ todaysSummary.caffeine }}g caffeine</span>
 		</div>
     <div class="field-group">
       <label class="field-label">entry</label>
@@ -98,17 +98,19 @@ const todaysSummary = computed(() => {
 	)
 	let calories = 0
 	let protein = 0
+	let caffeine = 0
 
 	todaysEntries.forEach(e => {
 		if (e.metric_type === 'meal' && e.metric_data?.items) {
 			e.metric_data.items.forEach(item => {
 				calories += item.calories || 0
 				protein += item.protein || 0
+				caffeine += item.caffeine || 0
 			})
 		}
 	})
 
-	return { calories: Math.round(calories), protein: Math.round(protein) }
+	return { calories: Math.round(calories), protein: Math.round(protein), caffeine: Math.round(caffeine) }
 })
 
 const todayStr = new Date().toLocaleDateString('en-US', {

@@ -55,6 +55,10 @@
             <label>protein</label>
             <input type="number" v-model="row.protein" placeholder="0" step="any" />
           </div>
+					<div class="metric-field-row">
+						<label>caffeine</label>
+						<input type="number" v-model="row.caffeine" placeholder="0" step="any" />
+					</div>
         </div>
         <button v-if="mealRows.length > 1" class="meal-remove-btn" @click="removeMealRow(i)">remove</button>
         <div v-if="i < mealRows.length - 1" class="meal-divider" />
@@ -97,7 +101,8 @@ function populate(type, data) {
 			name:     item.name     || '',
 			qty:      item.qty      ?? '',
 			calories: item.calories ?? '',
-			protein:  item.protein ?? ''
+			protein:  item.protein ?? '',
+			caffeine: item.caffeine ?? ''
 		}))
 	  return
 	}
