@@ -7,6 +7,7 @@ from app import models, schemas, auth
 from app.limiter import limiter
 from fastapi import Request
 from datetime import datetime, timezone, timedelta
+from app.email import generate_verification_token, verification_token_expiry, send_verification_email
 
 router = APIRouter(prefix="/api/users")
 
@@ -20,14 +21,19 @@ async def register(request: Request, user: schemas.UserCreate, db: AsyncSession 
     )
     if existing.scalar_one_or_none():
         raise HTTPException(400, "Email or username already taken")
+    token = generate_verification_token()
     db_user = models.User(
         email=user.email,
         username=user.username,
-        hashed_password=auth.hash_password(user.password)
+        hashed_password=auth.hash_password(user.password),
+        is_verified=False,
+        verification_token=token,
+        verification_token_expires=verification_token_expiry()
     )
     db.add(db_user)
     await db.commit()
     await db.refresh(db_user)
+    await send_verification_email(user.email, user.username, token)
     return db_user
 
 @router.post("/login", response_model=schemas.Token)
@@ -69,3 +75,31 @@ async def login(
 @router.get("/me", response_model=schemas.UserOut)
 async def me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
+
+@router.get("/verify-email")
+async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
+        result = await db.execute(select(models.User).where(models.User.verification_token == token))
+        user = result.scalar_one_or_none()
+        if not user:
+                raise HTTPException(400, "Invalid verification token")
+        if user.verification_token_expires < datetime.now(timezone.utc):
+                raise HTTPException(400, "Verification token expired")
+        user.is_verified = True
+        user.verification_token = None
+        user.verification_token_expires = None
+        await db.commit()
+        return {"ok": True}
+
+@router.post("/resend-verification")
+@limiter.limit("3/minute")
+async def resend_verification(request: Request, email: str, db: AsyncSession = Depends(get_db)):
+        result = await db.execute(select(models.User).where(models.User.email == email))
+        user = result.scalar_one_or_none()
+        if not user or user.is_verified:
+                return {"ok":True} # Don't reveal if email exists
+        token = generate_verification_token()
+        user.verification_token = token
+        user.verification_token_expires = verification_token_expiry()
+        await db.commit()
+        await send_verification_email(user.email, user.username, token)
+        return {"ok": True}

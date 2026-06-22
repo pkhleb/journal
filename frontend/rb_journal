@@ -1,3 +1,19 @@
 #!/bin/bash
+set -e
+
+# Build frontend
 npm run build
+
+# Deploy frontend (only runs if build succeeded due to set -e)
 scp -r dist/* journal@journal.pkhleb.com:~/journal-app/static/
+
+# Pull backend files from server
+scp -r journal@journal.pkhleb.com:~/journal-app/app/ ../backend/
+
+# Commit everything to current branch
+cd ..
+git add -A
+git status
+echo ""
+read -p "Commit message: " msg
+git commit -m "$msg"

@@ -65,6 +65,7 @@ import MetricFields from '../components/MetricFields.vue'
 import EntryCard from '../components/EntryCard.vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
+import { apiFetch } from '../api.js'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -155,8 +156,15 @@ async function saveEdit() {
   cancelEdit()
 }
 
-function exportDb() {
-  window.location.href = `${store.API}/export/db`
+async function exportDb() {
+	const res = await apiFetch('/export/db')
+	const blob = await res.blob()
+	const url = URL.createObjectURL(blob)
+	const a = document.createElement('a')
+	a.href = url
+	a.download = 'journal-export.json'
+	a.click()
+	URL.revokeObjectURL(url)
 }
 </script>
 

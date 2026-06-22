@@ -3,6 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
 from app import models, schemas, auth
+from fastapi.responses import JSONResponse
+import json
+from datetime import date
 
 router = APIRouter(prefix="/api")
 
@@ -79,6 +82,50 @@ async def delete_entry(
     return {"ok": True}
 
 @router.get("/export/db")
-async def export_db(current_user: models.User = Depends(auth.get_current_user)):
-    # TODO: implement postgres export
-    raise HTTPException(501, "Export not yet implemented for PostgreSQL")
+async def export_db(
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
+):
+    entries_result = await db.execute(
+        select(models.Entry)
+        .where(models.Entry.user_id == current_user.id)
+        .order_by(models.Entry.created_at.asc())
+    )
+    entries = entries_result.scalars().all()
+
+    inventory_result = await db.execute(
+        select(models.InventoryItem)
+        .where(models.InventoryItem.user_id == current_user.id)
+        .order_by(models.InventoryItem.created_at.asc())
+    )
+    inventory = inventory_result.scalars().all()
+
+    payload = {
+        "exported_at": date.today().isoformat(),
+        "user": current_user.username,
+        "entries": [
+            {
+                "id": e.id,
+                "prose": e.prose,
+                "metric_type": e.metric_type,
+                "metric_data": e.metric_data,
+                "created_at": e.created_at.isoformat(),
+            }
+            for e in entries
+        ],
+        "inventory": [
+            {
+                "id": i.id,
+                "name": i.name,
+                "items": i.items,
+                "created_at": i.created_at.isoformat(),
+            }
+            for i in inventory
+        ],
+    }
+    return JSONResponse(
+        content=payload,
+        headers={
+            "Content-Disposition": f"attachment; filename=journal-export-{date.today().isoformat()}.json"
+        }
+    )

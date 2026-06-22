@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -17,6 +17,9 @@ class User(Base):
         inventory       = relationship("InventoryItem", back_populates="user")
         failed_login_attempts = Column(Integer, default=0)
         locked_until          = Column(DateTime(timezone=True), nullable=True)
+        is_verified           = Column(Boolean, default=False)
+        verification_token    = Column(String, nullable=True)
+        verification_token_expires = Column (DateTime(timezone=True), nullable=True)
 
 class Entry(Base):
         __tablename__ = "entries"
