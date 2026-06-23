@@ -69,13 +69,16 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useJournalStore } from '../stores/journal'
 import Combobox from './Combobox.vue'
 import { useMealRows } from '../composables/useMealRows'
+import { apiFetch } from '../api.js'
 
 const store = useJournalStore()
 const emit = defineEmits(['exerciseFilter'])
+
+const rankedExercises = ref([])
 
 const METRIC_TYPES = {
   weight:        [{ key: 'value',    label: 'lb',       type: 'number', placeholder: '0.0' }],
@@ -91,6 +94,18 @@ const selectedType = ref('')
 const fieldValues  = ref({})
 const { rows: mealRows, addRow: addMealRow, removeRow: removeMealRow,
 				onFoodNameSelected, onQtyChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
+
+async function fetchRanked() {
+  const lastName = fieldValues.value['name'] || null
+	const query = lastName ? `?last_exercise=${encodeURIComponent(lastName)}` : ''
+	const res = await apiFetch(`/exercises/ranked${query}`)
+	const data = await res.json()
+	rankedExercises.value = data
+}
+
+watch(selectedType, (val) => {
+  if (val === 'exercise') fetchRanked()
+})
 
 function populate(type, data) {
 	if (!type || !data) return
@@ -127,10 +142,14 @@ function onTypeChange() {
 function onExerciseNameChange(val) {
 	if (selectedType.value === 'exercise') {
 		emit('exerciseFilter', val)
+		fetchRanked()
 	}
 }
 
 function comboOptions(type, field) {
+  if (type === 'exercise' && field === 'name') {
+	  return rankedExercises.value
+  }
   return [...new Set(
     store.entries
       .filter(e => e.metric_type === type && e.metric_data?.[field])
