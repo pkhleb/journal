@@ -79,6 +79,7 @@ const store = useJournalStore()
 const emit = defineEmits(['exerciseFilter'])
 
 const rankedExercises = ref([])
+const lastSubmittedExercise = ref(null)
 
 const METRIC_TYPES = {
   weight:        [{ key: 'value',    label: 'lb',       type: 'number', placeholder: '0.0' }],
@@ -96,7 +97,7 @@ const { rows: mealRows, addRow: addMealRow, removeRow: removeMealRow,
 				onFoodNameSelected, onQtyChanged, collect: collectMeal, reset: resetMeal } = useMealRows()
 
 async function fetchRanked() {
-  const lastName = fieldValues.value['name'] || null
+  const lastName = fieldValues.value['name'] || lastSubmittedExercise.value || null
 	const query = lastName ? `?last_exercise=${encodeURIComponent(lastName)}` : ''
 	const res = await apiFetch(`/exercises/ranked${query}`)
 	const data = await res.json()
@@ -131,7 +132,7 @@ function populate(type, data) {
 	})
 }
 
-defineExpose({ collect, reset, populate })
+defineExpose({ collect, reset, populate, fetchRanked, lastSubmittedExercise  })
 
 function onTypeChange() {
 	fieldValues.value = {}

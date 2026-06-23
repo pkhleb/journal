@@ -123,10 +123,14 @@ onMounted(() => store.fetchEntries())
 async function submit() {
   const { type, data } = metricFields.value.collect()
   if (!prose.value.trim() && !type) return
+	if (type === 'exercise' && data?.name) {
+    metricFields.value.lastSubmittedExercise = data.name
+	}
   await store.submitEntry(prose.value.trim(), type, data)
   prose.value = ''
   metricFields.value.reset()
 	exerciseFilter.value = ''
+	if (type === 'exercise') metricFields.value.fetchRanked()
   toastVisible.value = true
   setTimeout(() => toastVisible.value = false, 1800)
 }

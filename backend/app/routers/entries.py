@@ -6,7 +6,7 @@ from app import models, schemas, auth
 from fastapi.responses import JSONResponse
 import json
 from datetime import date
-from app.routers.analyticsd import get_exxercise_rankings
+from app.routers.analytics import get_exercise_rankings
 
 router = APIRouter(prefix="/api")
 
