@@ -16,7 +16,7 @@ journal.pkhleb.com {
 		reverse_proxy localhost:8000
 	}
 	handle {
-		root * /home/journal/journal-app/static
+		root * /home/journal/journal/static
 		try_files {path} /index.html
 		file_server
 	}
