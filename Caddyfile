@@ -1,0 +1,32 @@
+# The Caddyfile is an easy way to configure your Caddy web server.
+#
+# Unless the file starts with a global options block, the first
+# uncommented line is always the address of your site.
+#
+# To use your own domain name (with automatic HTTPS), first make
+# sure your domain's A/AAAA DNS records are properly pointed to
+# this machine's public IP, then replace ":80" below with your
+# domain name.
+
+journal.pkhleb.com {
+	log {
+		output file /var/log/caddy/access.log
+	}
+	handle /api/* {
+		reverse_proxy localhost:8000
+	}
+	handle {
+		root * /home/journal/journal-app/static
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Another common task is to set up a reverse proxy:
+
+
+	# Or serve a PHP site through php-fpm:
+	# php_fastcgi localhost:9000
+}
+
+# Refer to the Caddy docs for more information:
+# https://caddyserver.com/docs/caddyfile
