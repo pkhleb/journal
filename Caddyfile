@@ -16,9 +16,7 @@ journal.pkhleb.com {
 		reverse_proxy localhost:8000
 	}
 	handle {
-		root * /home/journal/journal/static
-		try_files {path} /index.html
-		file_server
+		reverse_proxy frontend:80
 	}
 
 	# Another common task is to set up a reverse proxy:
