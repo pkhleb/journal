@@ -13,18 +13,9 @@ journal.pkhleb.com {
 		output file /var/log/caddy/access.log
 	}
 	handle /api/* {
-		reverse_proxy localhost:8000
+		reverse_proxy backend:8000
 	}
 	handle {
 		reverse_proxy frontend:80
 	}
-
-	# Another common task is to set up a reverse proxy:
-
-
-	# Or serve a PHP site through php-fpm:
-	# php_fastcgi localhost:9000
 }
-
-# Refer to the Caddy docs for more information:
-# https://caddyserver.com/docs/caddyfile
