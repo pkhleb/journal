@@ -133,9 +133,8 @@ async def export_db(
 
 @router.get("/exercises/ranked")
 async def get_ranked_exercises(
-    last_exercise: str | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    ranked = await get_exercise_rankings(db, current_user.id, last_exercise)
+    ranked = await get_exercise_rankings(db, current_user.id)
     return ranked
