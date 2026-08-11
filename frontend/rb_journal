@@ -24,4 +24,4 @@ else
 fi
 
 # Rebuild and restart frontend container on server
-ssh journal@journal.pkhleb.com "cd ~/journal && git pull && docker compose up -d --build frontend"
+ssh journal@journal.pkhleb.com "cd ~/journal && git pull && cd ~/journal && docker compose up -d --build frontend"
