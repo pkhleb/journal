@@ -18,7 +18,7 @@ git status
 echo ""
 read -p "Commit message: " msg
 git commit -m "$msg"
-git push
+git push origin main
 
 # Rebuild and restart frontend container on server
 ssh journal@journal.pkhleb.com "cd ~/journal && git pull && docker compose up -d --build frontend"
