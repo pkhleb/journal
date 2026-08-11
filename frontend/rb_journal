@@ -5,7 +5,7 @@ set -e
 npm run build
 
 # Copy dist to server
-scp -r dist/ journal@journal.pkhleb.com:~/journal/frontend/dist/
+scp -r dist/* journal@journal.pkhleb.com:~/journal/frontend/dist/
 
 # Pull backend files from server
 scp -r journal@journal.pkhleb.com:~/journal/backend/app/ ../backend/
