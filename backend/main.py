@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 from app.routers import entries, inventory, users
@@ -24,4 +23,3 @@ app.include_router(users.router)
 app.include_router(entries.router)
 app.include_router(inventory.router)
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
