@@ -4,16 +4,21 @@ set -e
 # Build frontend
 npm run build
 
-# Deploy frontend (only runs if build succeeded due to set -e)
-scp -r dist/* journal@journal.pkhleb.com:~/journal-app/static/
+# Copy dist to server
+scp -r dist/ journal@journal.pkhleb.com:~/journal/frontend/dist/
 
 # Pull backend files from server
-scp -r journal@journal.pkhleb.com:~/journal-app/app/ ../backend/
+scp -r journal@journal.pkhleb.com:~/journal/backend/app/ ../backend/
 
-# Commit everything to current branch
+
+# Commit to git
 cd ..
 git add -A
 git status
 echo ""
 read -p "Commit message: " msg
 git commit -m "$msg"
+git push
+
+# Rebuild and restart frontend container on server
+ssh journal@journal.pkhleb.com "cd ~/journal && git pull && docker compose up -d --build frontend"
