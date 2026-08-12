@@ -43,10 +43,30 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://journal_test:testpassword@localhost:5433/journal_test
         run: pytest tests/ -v
 
-  deploy:
+  build-and-push:
     needs: test
     runs-on: ubuntu-latest
-    if: success()
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/pkhleb/journal-backend:latest
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -81,4 +101,5 @@ jobs:
           script: |
             cd ~/journal
             git pull
-            docker compose up -d --build
+            docker compose pull backend
+            docker compose up -d
