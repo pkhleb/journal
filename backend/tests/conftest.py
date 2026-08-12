@@ -1,13 +1,13 @@
 import pytest
 import pytest_asyncio
+from unittest.mock import patch, AsyncMock
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db
 from main import app
 
-TEST_DATABASE_URL =
-"postgresql+asyncpg://journal_test:testpassword@localhost:5433/journal_test"
+TEST_DATABASE_URL = "postgresql+asyncpg://journal_test:testpassword@localhost:5433/journal_test"
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestSessionLocal = sessionmaker(
@@ -23,12 +23,30 @@ async def override_get_db():
 app.dependency_overrides[get_db] = override_get_db
 
 @pytest_asyncio.fixture(autouse=True)
+async def reset_rate_limiter():
+    from app.limiter import limiter
+    limiter._storage.reset()
+    yield
+
+@pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_db():
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_tables():
+    yield
+    async with test_engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
+
+@pytest_asyncio.fixture(autouse=True)
+async def mock_email():
+    with patch("app.routers.users.send_verification_email", new_callable=AsyncMock):
+        yield
 
 @pytest_asyncio.fixture
 async def client():

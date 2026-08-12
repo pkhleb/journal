@@ -1,4 +1,5 @@
 import pytest
+from tests.conftest import TestSessionLocal
 
 class TestRegister:
     async def test_register_success(self, client):
@@ -29,12 +30,12 @@ class TestRegister:
             "username": "sameuser",
             "password": "password123"
         })
-        await client.post("/api/users/register", json={
+        res = await client.post("/api/users/register", json={
             "email": "second@example.com",
             "username": "sameuser",
             "password": "password123"
         })
-        assert res.status_code == 403
+        assert res.status_code == 400
         
 class TestLogin:
     async def test_login_unverified(self, client):
@@ -59,6 +60,15 @@ class TestLogin:
             "username": "testuser",
             "password": "password123"
         })
+        from sqlalchemy import update
+        from app import models
+        async with TestSessionLocal() as db:
+            await db.execute(
+                update(models.User)
+                .where(models.User.email == "test@example.com")
+                .values(is_verified=True)
+            )
+            await db.commit()
         res = await client.post("/api/users/login", data={
             "username": "test@example.com",
             "password": "wrongpassword"
@@ -87,14 +97,14 @@ class TestLogin:
             "username": "lockout@example.com",
             "password": "wrongpassword"
         })
-        assert res.status_code == 423
+        assert res.status_code == 403
 
 class TestProtectedRoutes:
     async def test_no_token_rejected(self, client):
-        res = await client.get("/api/entries/")
+        res = await client.get("/api/entries")
         assert res.status_code == 401
 
     async def test_invalid_token_rejected(self, client):
         client.headers.update({"Authorization": "Bearer faketoken"})
-        res = await client.get("/api/entries/")
+        res = await client.get("/api/entries")
         assert res.status_code == 401

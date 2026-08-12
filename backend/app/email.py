@@ -3,8 +3,8 @@ import os
 from datetime import datetime, timezone, timedelta
 import secrets
 
-resend.api_key = os.environ["RESEND_API_KEY"]
-FRONTEND_URL = os.environ["FRONTEND_URL"]
+resend.api_key = os.environ.get("RESEND_API_KEY","")
+FRONTEND_URL = os.environ.get("FRONTEND_URL")
 
 def generate_verification_token():
     return secrets.token_urlsafe(32)

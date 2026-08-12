@@ -49,10 +49,14 @@ async def login(
     if not user:
         raise HTTPException(status_code=401, detail="Incorrect email or password")
 
+
     # Check if account is locked
     if user.locked_until and user.locked_until > datetime.now(timezone.utc):
         remaining = int((user.locked_until - datetime.now(timezone.utc)).total_seconds()/60)
         raise HTTPException(status_code=403, detail=f"Account locked. Try again in {remaining} minutes.")
+
+    if not user.is_verified:
+        raise HTTPException(status_code=403, detail="Email not verified.")
 
     # Check password
     if not auth.verify_password(form_data.password, user.hashed_password):
