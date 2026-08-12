@@ -14,6 +14,10 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(CORSMiddleware, allow_origins=["https://journal.pkhleb.com"], allow_methods=["*"], allow_headers=["*"])
 
+@app.get("/api/health")
+async def health():
+    return {"status": "ok"}
+
 @app.on_event("startup")
 async def init_db():
     async with engine.begin() as conn:
