@@ -1,5 +1,5 @@
 import pytest
-from tests.conftest import TestLocalSession
+from tests.conftest import TestSessionLocal
 
 class TestHealth:
     async def test_health(client):
