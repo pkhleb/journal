@@ -24,6 +24,7 @@ frontend/dist/
 # Database
 *.db
 *.sqlite
+export.json
 
 # Python
 __pycache__/
