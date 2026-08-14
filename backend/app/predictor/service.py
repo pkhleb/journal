@@ -16,12 +16,13 @@ async def _get_weights(db: AsyncSession, user_id: int) -> dict:
     return row.weights if row else DEFAULT_WEIGHTS
 
 async def predict(
-    db: AsyncSession, user_id: int, last_exercise: str | None = None
+    db: AsyncSession, user_id: int, last_exercise: str | None = None,
+    now: datetime | None = None,
 ) -> list[str]:
     """The one thing routers call to get a ranking. Logs the prediction
     internally for later resolution - callers don't need to know that
     happens."""
-    candidates = await get_exercise_candidates(db, user_id, last_exercise)
+    candidates = await get_exercise_candidates(db, user_id, last_exercise, now)
     if not candidates:
         return []
 
