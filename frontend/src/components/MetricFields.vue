@@ -143,7 +143,6 @@ function onTypeChange() {
 function onExerciseNameChange(val) {
 	if (selectedType.value === 'exercise') {
 		emit('exerciseFilter', val)
-		fetchRanked()
 	}
 }
 
