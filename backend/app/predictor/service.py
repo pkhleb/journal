@@ -8,20 +8,39 @@ from app.predictor.mixer import weight_candidates, apply_miss_only_update, DEFAU
 
 STALE_CUTOFF = timedelta(minutes=45)
 
+
 async def _get_weights(db: AsyncSession, user_id: int) -> dict:
+    """Return the current stored feature weights for a user.
+
+    Args:
+        db: Open database session.
+        user_id: User ID whose model weights are requested.
+
+    Returns:
+        dict: Current feature weights or the default weights if unset.
+    """
     result = await db.execute(
         select(models.ModelWeights).where(models.ModelWeights.user_id == user_id)
     )
     row = result.scalar_one_or_none()
     return row.weights if row else DEFAULT_WEIGHTS
 
+
 async def predict(
     db: AsyncSession, user_id: int, last_exercise: str | None = None,
     now: datetime | None = None,
 ) -> list[str]:
-    """The one thing routers call to get a ranking. Logs the prediction
-    internally for later resolution - callers don't need to know that
-    happens."""
+    """Create a ranking of exercise candidates and store the prediction event.
+
+    Args:
+        db: Open database session.
+        user_id: User ID to score candidates for.
+        last_exercise: Optional last exercise used as a ranking signal.
+        now: Optional timestamp used in tests for deterministic output.
+
+    Returns:
+        list[str]: Ranked exercise names.
+    """
     candidates = await get_exercise_candidates(db, user_id, last_exercise, now)
     if not candidates:
         return []
@@ -39,12 +58,15 @@ async def predict(
 
     return ranked_names
 
+
 async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
-    """The other thing routers call - after a set is actually logged, tell
-    the predictor what really happened. Internally: find the most recent
-    unresolved prediction, run the miss-only update, persist new weights,
-    write results back onto the event. Callers don't touch PredictionEvent
-    or ModelWeights directly at all."""
+    """Resolve the most recent prediction event with a user-selected exercise.
+
+    Args:
+        db: Open database session.
+        user_id: User whose prediction event should be resolved.
+        chosen_exercise: Exercise actually selected by the user.
+    """
     result = await db.execute(
         select(models.PredictionEvent)
         .where(

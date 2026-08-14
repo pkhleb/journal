@@ -3,16 +3,36 @@ import os
 from datetime import datetime, timezone, timedelta
 import secrets
 
-resend.api_key = os.environ.get("RESEND_API_KEY","")
+resend.api_key = os.environ.get("RESEND_API_KEY", "")
 FRONTEND_URL = os.environ.get("FRONTEND_URL")
 
+
 def generate_verification_token():
+    """Generate a secure email verification token.
+
+    Returns:
+        str: A URL-safe token used for one-time email verification.
+    """
     return secrets.token_urlsafe(32)
 
+
 def verification_token_expiry():
+    """Create the expiration timestamp for a verification email token.
+
+    Returns:
+        datetime: A UTC timestamp 24 hours in the future.
+    """
     return datetime.now(timezone.utc) + timedelta(hours=24)
 
+
 async def send_verification_email(email: str, username: str, token: str):
+    """Send a verification email for a newly registered user.
+
+    Args:
+        email: Recipient email address.
+        username: Username to personalize the message.
+        token: Verification token embedded in the link.
+    """
     verification_url = f"{FRONTEND_URL}/verify-email?token={token}"
     resend.Emails.send({
         "from": "noreply@pkhleb.com",
