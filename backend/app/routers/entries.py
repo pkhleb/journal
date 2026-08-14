@@ -6,7 +6,7 @@ from app import models, schemas, auth
 from fastapi.responses import JSONResponse
 import json
 from datetime import date
-from app.routers.analytics import get_exercise_rankings
+from app.predictor import service as predictor
 
 router = APIRouter(prefix="/api")
 
@@ -39,6 +39,10 @@ async def create_entry(
     db.add(db_entry)
     await db.commit()
     await db.refresh(db_entry)
+    if entry.metric_type == "exercise":
+        name = (entry.metric_data or {}).get("name")
+        if name:
+            await predictor.resolve(db, current_user.id, chosen_exercise=name)
     return db_entry
 
 @router.patch("/entries/{entry_id}")
@@ -137,5 +141,4 @@ async def get_ranked_exercises(
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user)
 ):
-    ranked = await get_exercise_rankings(db, current_user.id, last_exercise)
-    return ranked
+    return await predictor.predict(db, current_user.id, last_exercise)

@@ -41,3 +41,21 @@ class InventoryItem(Base):
         items           = Column(JSONB, nullable=False)
         created_at      = Column(DateTime(timezone=True), server_default=func.now())
         user            = relationship("User", back_populates="inventory")
+
+class ModelWeights(Base):
+    __tablename__ = "model_weights"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    user_id             = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    weights             = Column(JSONB, nullable=False)
+    updated_at          = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class PredictionEvent(Base):
+    __tablename__ = "prediction_events"
+
+    id                  = Column(Integer, primary_key=True, index=True)
+    user_id             = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at          = Column(DateTime(timezone=True), server_default=func.now())
+    resolved            = Column(Boolean, default=False, index=True)
+    resolved_at         = Column(DateTime(timezone=True), nullable=True)
+    data                = Column(JSONB, nullable=False)
