@@ -8,16 +8,35 @@ DEFAULT_WEIGHTS = {
     "recency": 0.5,
 }
 
+
 def weight_candidates(candidates: list[dict], weights: dict = DEFAULT_WEIGHTS) -> list[str]:
-    """Combines feature vectors into a single score per candidate, sorted descending."""
+    """Score and sort exercise candidates by their weighted feature values.
+
+    Args:
+        candidates: Candidate exercise list with feature vectors.
+        weights: Mapping of feature names to their scalar weights.
+
+    Returns:
+        list[str]: Exercise names in descending score order.
+    """
     scored = [
         (c["exercise"], sum(weights[k] * c["features"][k] for k in FEATURE_ORDER))
-         for c in candidates
+        for c in candidates
     ]
     return [name for name, _ in sorted(scored, key=lambda x: x[1], reverse=True)]
 
+
 def _to_matrix(candidates: list[dict]) -> np.ndarray:
+    """Convert feature dictionaries into a dense matrix for linear scoring.
+
+    Args:
+        candidates: Candidate exercise list with feature vectors.
+
+    Returns:
+        np.ndarray: Matrix shaped like (n_candidates, n_features).
+    """
     return np.array([[c["features"][k] for k in FEATURE_ORDER] for c in candidates])
+
 
 def apply_miss_only_update(
     candidates: list[dict],
@@ -28,11 +47,19 @@ def apply_miss_only_update(
     lr: float = 0.05,
     l2: float = 0.1,
 ) -> tuple[dict, dict]:
-    """Miss-only structured-perceptron raning update.
+    """Apply a miss-only perceptron update to the feature weights.
 
-    Returns (new_weights, info) where info = {"hit": bool, "rank": int, "updated": bool}
-    If chosen_exercise wasn't among candidates at all, returns the weights
-    unchanged with updated=False - nothing to learn from.
+    Args:
+        candidates: Scored candidate exercise list.
+        chosen_exercise: The exercise actually selected by the user.
+        weights: Current model weights used during prediction.
+        prior_weights: Reference weights from before the current decision.
+        top_k: Number of top-ranked candidates considered in the miss condition.
+        lr: Learning rate for the weight update.
+        l2: Regularization term for the weight shift.
+
+    Returns:
+        tuple[dict, dict]: Updated weight mapping and metadata about hit/rank/update status.
     """
     names = [c["exercise"] for c in candidates]
     if chosen_exercise not in names:
