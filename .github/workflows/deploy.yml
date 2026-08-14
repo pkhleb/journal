@@ -107,6 +107,6 @@ jobs:
           script: |
             cd ~/journal
             git pull
-			docker compose pull backend
-			docker compose build frontend
+            docker compose pull backend
+            docker compose build frontend
             docker compose up -d
