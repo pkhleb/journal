@@ -12,16 +12,30 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-app.add_middleware(CORSMiddleware, allow_origins=["https://journal.pkhleb.com"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://journal.pkhleb.com"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/api/health")
 async def health():
+    """Return a simple service health indicator.
+
+    Returns:
+        dict: A JSON payload containing the application health status.
+    """
     return {"status": "ok"}
+
 
 @app.on_event("startup")
 async def init_db():
+    """Create all database tables at application startup if they are missing."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
 
 app.include_router(users.router)
 app.include_router(entries.router)

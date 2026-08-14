@@ -8,13 +8,24 @@ from app.models import Entry
 
 LOCAL_TZ = ZoneInfo("America/New_York")
 
+
 async def get_exercise_candidates(
     db: AsyncSession, user_id: int, last_exercise: str | None = None,
     now: datetime | None = None,
 ) -> list[dict]:
-    """Per-exercise feature vectors, unweighted.
+    """Build unweighted feature vectors for the user's exercise history.
 
-    Each item: {"exercise": name, "features": {"transition": float, "weekday": float, "recency": float}}
+    Each item has the form:
+        {"exercise": name, "features": {"transition": float, "weekday": float, "recency": float}}
+
+    Args:
+        db: Open database session.
+        user_id: User whose prior exercise history will be analyzed.
+        last_exercise: Most recent exercise name to use as transition context.
+        now: Optional timestamp used for feature evaluation in tests.
+
+    Returns:
+        list[dict]: Candidate exercise metadata with feature scores.
     """
     result = await db.execute(
         select(Entry)
@@ -62,7 +73,7 @@ async def get_exercise_candidates(
     candidates = []
     for name in last_seen:
         transition_score = (
-            transition_counts[last_exercise].get(name, 0) /  transition_total
+            transition_counts[last_exercise].get(name, 0) / transition_total
             if transition_total else 0.0
         )
         weekday_score = (
