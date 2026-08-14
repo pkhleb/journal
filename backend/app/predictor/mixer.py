@@ -10,15 +10,7 @@ DEFAULT_WEIGHTS = {
 
 
 def weight_candidates(candidates: list[dict], weights: dict = DEFAULT_WEIGHTS) -> list[str]:
-    """Score and sort exercise candidates by their weighted feature values.
-
-    Args:
-        candidates: Candidate exercise list with feature vectors.
-        weights: Mapping of feature names to their scalar weights.
-
-    Returns:
-        list[str]: Exercise names in descending score order.
-    """
+    """Combines feature vectors into a single score per candidate, sorted descending."""
     scored = [
         (c["exercise"], sum(weights[k] * c["features"][k] for k in FEATURE_ORDER))
         for c in candidates
@@ -27,18 +19,10 @@ def weight_candidates(candidates: list[dict], weights: dict = DEFAULT_WEIGHTS) -
 
 
 def _to_matrix(candidates: list[dict]) -> np.ndarray:
-    """Convert feature dictionaries into a dense matrix for linear scoring.
-
-    Args:
-        candidates: Candidate exercise list with feature vectors.
-
-    Returns:
-        np.ndarray: Matrix shaped like (n_candidates, n_features).
-    """
     return np.array([[c["features"][k] for k in FEATURE_ORDER] for c in candidates])
 
 
-def apply_miss_only_update(
+def apply_ranking_update(
     candidates: list[dict],
     chosen_exercise: str,
     weights: dict,
@@ -46,20 +30,18 @@ def apply_miss_only_update(
     top_k: int = 3,
     lr: float = 0.05,
     l2: float = 0.1,
+    mode: str = "miss_only",
 ) -> tuple[dict, dict]:
-    """Apply a miss-only perceptron update to the feature weights.
+    """Structured-perceptron ranking update, generalized over two modes:
 
-    Args:
-        candidates: Scored candidate exercise list.
-        chosen_exercise: The exercise actually selected by the user.
-        weights: Current model weights used during prediction.
-        prior_weights: Reference weights from before the current decision.
-        top_k: Number of top-ranked candidates considered in the miss condition.
-        lr: Learning rate for the weight update.
-        l2: Regularization term for the weight shift.
+    - "miss_only": only update when the chosen exercise falls outside the
+      top_k. Hits are free passes.
+    - "always": also updates on hits, nudging the chosen exercise past
+      whatever's currently ranked #1 (unless it's already #1) — lets the
+      model keep sharpening an already-correct ranking instead of treating
+      every hit as equally fine.
 
-    Returns:
-        tuple[dict, dict]: Updated weight mapping and metadata about hit/rank/update status.
+    Returns (new_weights, info) where info = {"hit": bool, "rank": int, "updated": bool}.
     """
     names = [c["exercise"] for c in candidates]
     if chosen_exercise not in names:
@@ -76,14 +58,35 @@ def apply_miss_only_update(
 
     k = min(top_k, len(order))
     hit = rank < k
-    if hit:
-        return weights, {"hit": True, "rank": rank, "updated": False}
 
-    violators = order[:k]
+    if hit:
+        if mode == "miss_only" or rank == 0:
+            return weights, {"hit": True, "rank": rank, "updated": False}
+        violators = np.array([order[0]])  # "always": nudge past #1 only
+    else:
+        violators = order[:k]
+
     chosen_feat = features[chosen_idx]
     grad = np.mean([features[v] - chosen_feat for v in violators], axis=0)
     grad += l2 * (w - w_prior)
     w_new = w - lr * grad
 
     new_weights = {k_: float(v) for k_, v in zip(FEATURE_ORDER, w_new)}
-    return new_weights, {"hit": False, "rank": rank, "updated": True}
+    return new_weights, {"hit": hit, "rank": rank, "updated": True}
+
+
+def apply_miss_only_update(
+    candidates: list[dict],
+    chosen_exercise: str,
+    weights: dict,
+    prior_weights: dict,
+    top_k: int = 3,
+    lr: float = 0.05,
+    l2: float = 0.1,
+) -> tuple[dict, dict]:
+    """Kept as-is for existing callers (predictor/service.py) — thin wrapper
+    around apply_ranking_update with mode="miss_only" fixed, so production
+    behavior and signature are both unchanged."""
+    return apply_ranking_update(
+        candidates, chosen_exercise, weights, prior_weights, top_k, lr, l2, mode="miss_only"
+    )
