@@ -1,0 +1,17 @@
+{
+  "model": "phase_only",
+  "run_at": "20260817T224032Z",
+  "n_source_entries": 969,
+  "summary": {
+    "n_events": 936,
+    "top1_accuracy": 0.48824786324786323,
+    "top3_hit_rate": 0.7061965811965812,
+    "mean_mrr": 0.6193263176146977
+  },
+  "final_weights": {
+    "transition": 0.25,
+    "phase_transition": 0.15,
+    "weekday": 0.1,
+    "recency": 0.5
+  }
+}

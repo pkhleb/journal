@@ -1,0 +1,16 @@
+{
+  "model": "miss_only_mixer",
+  "run_at": "20260814T215741Z",
+  "n_source_entries": 969,
+  "summary": {
+    "n_events": 936,
+    "top1_accuracy": 0.4594017094017094,
+    "top3_hit_rate": 0.6602564102564102,
+    "mean_mrr": 0.585034873104749
+  },
+  "final_weights": {
+    "transition": 0.01164508663489389,
+    "weekday": -0.0014225084759263082,
+    "recency": 0.034153309169123076
+  }
+}

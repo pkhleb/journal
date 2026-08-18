@@ -1,0 +1,19 @@
+{
+  "model": "all_signals",
+  "run_at": "20260817T225151Z",
+  "n_source_entries": 969,
+  "summary": {
+    "n_events": 936,
+    "top1_accuracy": 0.5149572649572649,
+    "top3_hit_rate": 0.7147435897435898,
+    "mean_mrr": 0.6379807963690352
+  },
+  "final_weights": {
+    "transition": 0.15,
+    "phase_transition": 0.1,
+    "weekday": 0.05,
+    "position_freq": 0.1,
+    "session_precedence": 0.15,
+    "recency": 0.45
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "model": "always_update_mixer",
+  "run_at": "20260817T225151Z",
+  "n_source_entries": 969,
+  "summary": {
+    "n_events": 936,
+    "top1_accuracy": 0.4391025641025641,
+    "top3_hit_rate": 0.6442307692307693,
+    "mean_mrr": 0.568466443005933
+  },
+  "final_weights": {
+    "transition": 0.03344903457787815,
+    "phase_transition": 0.012214093224035506,
+    "weekday": -0.0184997965486154,
+    "position_freq": 0.010628338644923683,
+    "session_precedence": 0.027745550175768713,
+    "recency": 0.012162273259354815
+  }
+}

@@ -1,25 +1,21 @@
 import numpy as np
-
-FEATURE_ORDER = ["transition", "weekday", "recency"]
-
-DEFAULT_WEIGHTS = {
-    "transition": 0.4,
-    "weekday": 0.1,
-    "recency": 0.5,
-}
-
+from app.predictor.config import FEATURE_ORDER, DEFAULT_WEIGHTS
 
 def weight_candidates(candidates: list[dict], weights: dict = DEFAULT_WEIGHTS) -> list[str]:
-    """Combines feature vectors into a single score per candidate, sorted descending."""
+    """Combines feature vectors into a single score per candidate, sorted
+    descending. Uses .get(k, 0.0) rather than direct indexing so a weights
+    dict from before a feature existed (e.g. a model_weights row persisted
+    prior to phase_transition being added) degrades gracefully — that
+    feature just contributes nothing — instead of raising KeyError."""
     scored = [
-        (c["exercise"], sum(weights[k] * c["features"][k] for k in FEATURE_ORDER))
+        (c["exercise"], sum(weights.get(k, 0.0) * c["features"].get(k, 0.0) for k in FEATURE_ORDER))
         for c in candidates
     ]
     return [name for name, _ in sorted(scored, key=lambda x: x[1], reverse=True)]
 
 
 def _to_matrix(candidates: list[dict]) -> np.ndarray:
-    return np.array([[c["features"][k] for k in FEATURE_ORDER] for c in candidates])
+    return np.array([[c["features"].get(k, 0.0) for k in FEATURE_ORDER] for c in candidates])
 
 
 def apply_ranking_update(
@@ -47,8 +43,8 @@ def apply_ranking_update(
     if chosen_exercise not in names:
         return weights, {"hit": None, "rank": None, "updated": False}
 
-    w = np.array([weights[k] for k in FEATURE_ORDER])
-    w_prior = np.array([prior_weights[k] for k in FEATURE_ORDER])
+    w = np.array([weights.get(k, DEFAULT_WEIGHTS[k]) for k in FEATURE_ORDER])
+    w_prior = np.array([prior_weights.get(k, DEFAULT_WEIGHTS[k]) for k in FEATURE_ORDER])
     features = _to_matrix(candidates)
     chosen_idx = names.index(chosen_exercise)
 

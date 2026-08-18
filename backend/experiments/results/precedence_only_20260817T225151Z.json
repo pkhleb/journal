@@ -1,0 +1,17 @@
+{
+  "model": "precedence_only",
+  "run_at": "20260817T225151Z",
+  "n_source_entries": 969,
+  "summary": {
+    "n_events": 936,
+    "top1_accuracy": 0.49145299145299143,
+    "top3_hit_rate": 0.6997863247863247,
+    "mean_mrr": 0.6183045933951462
+  },
+  "final_weights": {
+    "transition": 0.25,
+    "weekday": 0.1,
+    "session_precedence": 0.15,
+    "recency": 0.5
+  }
+}
