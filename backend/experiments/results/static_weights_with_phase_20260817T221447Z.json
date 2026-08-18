@@ -1,0 +1,17 @@
+{
+  "model": "static_weights_with_phase",
+  "run_at": "20260817T221447Z",
+  "n_source_entries": 969,
+  "summary": {
+    "n_events": 936,
+    "top1_accuracy": 0.48183760683760685,
+    "top3_hit_rate": 0.6997863247863247,
+    "mean_mrr": 0.614324572188785
+  },
+  "final_weights": {
+    "transition": 0.25,
+    "phase_transition": 0.15,
+    "weekday": 0.1,
+    "recency": 0.5
+  }
+}
