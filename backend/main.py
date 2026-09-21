@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.database import engine, Base
 from app.routers import entries, inventory, users
 from app.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
@@ -29,12 +28,6 @@ async def health():
     """
     return {"status": "ok"}
 
-
-@app.on_event("startup")
-async def init_db():
-    """Create all database tables at application startup if they are missing."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
 
 app.include_router(users.router)
