@@ -59,3 +59,4 @@ class PredictionEvent(Base):
     resolved            = Column(Boolean, default=False, index=True)
     resolved_at         = Column(DateTime(timezone=True), nullable=True)
     data                = Column(JSONB, nullable=False)
+    latency_ms          = Column(Float, nullable=True)
