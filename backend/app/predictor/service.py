@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from time import perf_counter
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -48,6 +49,7 @@ async def predict(
     within the same day, and updates today's still-open prediction event in
     place rather than inserting a new row on every call — important since
     this can get hit once per keystroke from a search box."""
+    started = perf_counter()
     now = now or datetime.now(timezone.utc)
     aggregates = await _get_aggregates(db, user_id, now)
     candidates = build_candidates(aggregates, last_exercise, now)
@@ -56,6 +58,7 @@ async def predict(
 
     weights = await _get_weights(db, user_id)
     ranked_names = weight_candidates(candidates, weights)
+    latency_ms = (perf_counter() - started) * 1000
 
     result = await db.execute(
         select(models.PredictionEvent)
@@ -67,15 +70,28 @@ async def predict(
         .limit(1)
     )
     event = result.scalar_one_or_none()
-    event_data = {"candidates": candidates, "weights_snapshot": weights}
+    event_data = {
+        "event_type": "next_exercise_prediction",
+        "last_exercise": last_exercise,
+        "candidates": candidates,
+        "ranked_exercises": ranked_names,
+        "weights_snapshot": weights,
+        "prediction_created_at": now.isoformat(),
+    }
 
     if event and (now - event.created_at) <= STALE_CUTOFF:
         # Still-live prediction from moments ago (e.g. the previous
         # keystroke) — refresh it in place instead of adding a new row.
         event.data = event_data
         event.created_at = now
+        event.latency_ms = latency_ms
     else:
-        event = models.PredictionEvent(user_id=user_id, resolved=False, data=event_data)
+        event = models.PredictionEvent(
+            user_id=user_id,
+            resolved=False,
+            data=event_data,
+            latency_ms=latency_ms,
+        )
         db.add(event)
 
     await db.commit()
@@ -101,9 +117,10 @@ async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
     if event is None:
         return
 
-    if datetime.now(timezone.utc) - event.created_at > STALE_CUTOFF:
+    now = datetime.now(timezone.utc)
+    if now - event.created_at > STALE_CUTOFF:
         event.resolved = True
-        event.resolved_at = datetime.now(timezone.utc)
+        event.resolved_at = now
         event.data = {**event.data, "chosen_exercise": chosen_exercise, "stale": True}
         await db.commit()
         return
@@ -127,7 +144,7 @@ async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
             db.add(models.ModelWeights(user_id=user_id, weights=new_weights))
 
     event.resolved = True
-    event.resolved_at = datetime.now(timezone.utc)
+    event.resolved_at = now
     event.data = {
         **event.data,
         "chosen_exercise": chosen_exercise,
