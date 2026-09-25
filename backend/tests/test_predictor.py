@@ -66,20 +66,25 @@ class TestPredictorMissOnlyUpdate:
         user_id = await get_test_user_id()
         async with TestSessionLocal() as db:
             await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
-            ranked = await predictor.predict(db, user_id, now=FROZEN_NOW)
+            ranked = await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
 
         assert ranked == ["Squat"]
 
         events = await get_events(user_id)
         assert len(events) == 1
         assert events[0].resolved is False
+        assert events[0].data["event_type"] == "next_exercise_prediction"
+        assert events[0].data["last_exercise"] == "Squat"
+        assert events[0].data["ranked_exercises"] == ["Squat"]
         assert events[0].data["weights_snapshot"] == DEFAULT_WEIGHTS
+        assert events[0].latency_ms is not None
+        assert events[0].latency_ms >= 0
 
     async def test_hit_does_not_update_weights(self, auth_client):
         user_id = await get_test_user_id()
         async with TestSessionLocal() as db:
             await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
-            await predictor.predict(db, user_id, now=FROZEN_NOW)
+            await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
             await predictor.resolve(db, user_id, chosen_exercise="Squat")
 
         events = await get_events(user_id)
@@ -88,6 +93,7 @@ class TestPredictorMissOnlyUpdate:
         assert events[-1].resolved is True
         assert events[-1].data["hit"] is True
         assert events[-1].data["updated"] is False
+        assert events[-1].data["chosen_exercise"] == "Squat"
         assert weights_row is None
 
     async def test_miss_updates_weights(self, auth_client):
@@ -98,7 +104,7 @@ class TestPredictorMissOnlyUpdate:
             await add_exercise_entry(db, user_id, "OHP", FROZEN_NOW - timedelta(days=10))
             await add_exercise_entry(db, user_id, "Curl", FROZEN_NOW - timedelta(days=40))
 
-            ranked = await predictor.predict(db, user_id, now=FROZEN_NOW)
+            ranked = await predictor.predict(db, user_id, last_exercise="Deadlift", now=FROZEN_NOW)
             assert ranked == ["Deadlift", "Row", "OHP", "Curl"]
 
             await predictor.resolve(db, user_id, chosen_exercise="Curl")
@@ -109,6 +115,7 @@ class TestPredictorMissOnlyUpdate:
         assert events[-1].data["hit"] is False
         assert events[-1].data["rank"] == 3
         assert events[-1].data["updated"] is True
+        assert events[-1].data["chosen_exercise"] == "Curl"
         assert weights_row is not None
         assert weights_row.weights != DEFAULT_WEIGHTS
 
@@ -116,7 +123,7 @@ class TestPredictorMissOnlyUpdate:
         user_id = await get_test_user_id()
         async with TestSessionLocal() as db:
             await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
-            await predictor.predict(db, user_id, now=FROZEN_NOW)
+            await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
             await predictor.resolve(db, user_id, chosen_exercise="Lunges")
 
         events = await get_events(user_id)
@@ -124,6 +131,7 @@ class TestPredictorMissOnlyUpdate:
 
         assert events[-1].resolved is True
         assert events[-1].data["updated"] is False
+        assert events[-1].data["chosen_exercise"] == "Lunges"
         assert weights_row is None
 
     async def test_resolve_with_no_unresolved_event_is_a_noop(self, auth_client):
@@ -131,15 +139,14 @@ class TestPredictorMissOnlyUpdate:
         async with TestSessionLocal() as db:
             await predictor.resolve(db, user_id, chosen_exercise="Anything")
 
-
         assert await get_events(user_id) == []
         assert await get_weights_row(user_id) is None
 
     async def test_stale_event_marked_resolved_without_updating(self, auth_client):
-        user_id = await  get_test_user_id()
+        user_id = await get_test_user_id()
         async with TestSessionLocal() as db:
             await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
-            await predictor.predict(db, user_id, now=FROZEN_NOW)
+            await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
 
             result = await db.execute(
                 select(models.PredictionEvent).where(models.PredictionEvent.user_id == user_id)
@@ -158,4 +165,17 @@ class TestPredictorMissOnlyUpdate:
         assert events[-1].resolved is True
         assert events[-1].data.get("stale") is True
         assert weights_row is None
+
+    async def test_prediction_event_tracks_latency(self, auth_client):
+        user_id = await get_test_user_id()
+        async with TestSessionLocal() as db:
+            await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
+            await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
+
+        events = await get_events(user_id)
+        assert len(events) == 1
+        assert events[0].latency_ms is not None
+        assert events[0].data["event_type"] == "next_exercise_prediction"
+        assert events[0].data["prediction_created_at"] == FROZEN_NOW.isoformat()
+
 
