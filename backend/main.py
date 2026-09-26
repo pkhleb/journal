@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import entries, inventory, users
+from app.routers import entries, inventory, users, predictor
 from app.limiter import limiter
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -33,4 +33,5 @@ async def health():
 app.include_router(users.router)
 app.include_router(entries.router)
 app.include_router(inventory.router)
+app.include_router(predictor.router)
 
