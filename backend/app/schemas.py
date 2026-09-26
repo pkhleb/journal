@@ -44,4 +44,14 @@ class InventoryItemOut(BaseModel):
         class Config:
                 from_attributes: True
 
+class PredictionEventOut(BaseModel):
+        id: int
+        user_id: int
+        created_at: datetime
+        resolved: bool
+        resolved_at: Optional[datetime]
+        data: dict
+        latency_ms: Optional[float]
 
+        class Config:
+                from_attributes = True
