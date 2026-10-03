@@ -3,6 +3,7 @@
     <div class="journal-header">
       <h1 class="journal-title">analytics</h1>
       <router-link to="/" class="nav-link">journal</router-link>
+      <router-link to="/predictor" class="nav-link">predictor</router-link>
     </div>
 
     <div class="chart-section">

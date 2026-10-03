@@ -179,3 +179,35 @@ class TestPredictorMissOnlyUpdate:
         assert events[0].data["prediction_created_at"] == FROZEN_NOW.isoformat()
 
 
+class TestPredictorMetricsEndpoint:
+    """/api/predictor/metrics must be scoped to the caller - it's easy to
+    forget the user_id filter here since current_user is otherwise only
+    used to require authentication."""
+
+    async def test_metrics_excludes_other_users_events(self, client, auth_client):
+        user_id = await get_test_user_id()
+
+        await client.post("/api/users/register", json={
+            "email": "other@example.com",
+            "username": "otheruser",
+            "password": "testpassword123",
+        })
+        other_user_id = await get_test_user_id("other@example.com")
+
+        async with TestSessionLocal() as db:
+            await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
+            await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
+            db.add(models.PredictionEvent(
+                user_id=other_user_id,
+                resolved=False,
+                data={"event_type": "next_exercise_prediction"},
+            ))
+            await db.commit()
+
+        res = await auth_client.get("/api/predictor/metrics")
+        assert res.status_code == 200
+        payload = res.json()
+        assert len(payload) == 1
+        assert all(e["user_id"] == user_id for e in payload)
+
+

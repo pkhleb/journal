@@ -17,15 +17,14 @@ async def get_prediction_metrics(
     db: AsyncSession = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    """Return the complete prediction event table for authenticated callers.
+    """Return the current user's prediction event history.
 
-    ``current_user`` is intentionally only used to require authentication. The
-    metrics endpoint is intended to expose the full prediction event dataset,
-    rather than limiting results to the current user's events.
+    Scoped to ``current_user`` — prediction events contain another user's
+    exercise history and choices, so this must never cross users.
     """
     result = await db.execute(
-        select(models.PredictionEvent).order_by(
-            models.PredictionEvent.created_at.desc()
-        )
+        select(models.PredictionEvent)
+        .where(models.PredictionEvent.user_id == current_user.id)
+        .order_by(models.PredictionEvent.created_at.desc())
     )
     return result.scalars().all()
