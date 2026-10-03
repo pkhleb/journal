@@ -20,7 +20,7 @@
         </div>
         <div class="stat-tile">
           <p class="stat-value">{{ stats.hitRatePct }}</p>
-          <p class="stat-label">top-1 hit rate</p>
+          <p class="stat-label">top-3 hit rate</p>
         </div>
         <div class="stat-tile">
           <p class="stat-value">{{ stats.avgRank }}</p>
