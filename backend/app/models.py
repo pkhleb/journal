@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.sql import expression
 from sqlalchemy import DateTime
 from app.database import Base
 
@@ -18,6 +19,7 @@ class User(Base):
         failed_login_attempts = Column(Integer, default=0)
         locked_until          = Column(DateTime(timezone=True), nullable=True)
         is_verified           = Column(Boolean, default=False)
+        is_admin              = Column(Boolean, default=False, server_default=expression.false(), nullable=False)
         verification_token    = Column(String, nullable=True)
         verification_token_expires = Column (DateTime(timezone=True), nullable=True)
 

@@ -5,6 +5,7 @@
 			<router-link to="/inventory" class="nav-link">inventory</router-link>
 			<router-link to="/analytics" class="nav-link">analytics</router-link>
 			<router-link to="/predictor" class="nav-link">predictor</router-link>
+			<router-link v-if="authStore.user?.is_admin" to="/activity" class="nav-link">activity</router-link>
 			<button class="nav-link" @click="logout" style="background:none;border:none;cursor:pointer;">logout</button>
       <span class="journal-date">{{ todayStr }}</span>
     </div>

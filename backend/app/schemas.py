@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional
-from datetime import datetime
+from datetime import date, datetime
 
 class UserCreate(BaseModel):
         email: EmailStr
@@ -11,6 +11,7 @@ class UserOut(BaseModel):
         id: int
         email: str
         created_at: datetime
+        is_admin: bool
         class Config:
                 from_attributes = True
 
@@ -55,3 +56,8 @@ class PredictionEventOut(BaseModel):
 
         class Config:
                 from_attributes = True
+
+class ActivityBucket(BaseModel):
+        period_start: date
+        posts: int
+        users: int
