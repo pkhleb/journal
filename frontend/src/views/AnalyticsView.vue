@@ -4,6 +4,7 @@
       <h1 class="journal-title">analytics</h1>
       <router-link to="/" class="nav-link">journal</router-link>
       <router-link to="/predictor" class="nav-link">predictor</router-link>
+      <router-link v-if="authStore.user?.is_admin" to="/activity" class="nav-link">activity</router-link>
     </div>
 
     <div class="chart-section">
@@ -21,6 +22,9 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { Chart, LineController, LineElement, PointElement, LinearScale, TimeScale, Tooltip } from 'chart.js'
 import 'chartjs-adapter-date-fns'
 import { useJournalStore } from '../stores/journal'
+import { useAuthStore } from '../stores/auth'
+
+const authStore = useAuthStore()
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, TimeScale, Tooltip)
 

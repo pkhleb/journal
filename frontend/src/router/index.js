@@ -3,6 +3,7 @@ import JournalView from '../views/JournalView.vue'
 import InventoryView from '../views/InventoryView.vue'
 import AnalyticsView from '../views/AnalyticsView.vue'
 import PredictorView from '../views/PredictorView.vue'
+import ActivityView from '../views/ActivityView.vue'
 import { useAuthStore } from '../stores/auth'
 import LoginView from '../views/LoginView.vue'
 
@@ -13,6 +14,7 @@ const router = createRouter({
 		{ path: '/inventory', component: InventoryView, meta: {requiresAuth: true} },
 		{ path: '/analytics', component: AnalyticsView, meta: {requiresAuth: true} },
 		{ path: '/predictor', component: PredictorView, meta: {requiresAuth: true} },
+		{ path: '/activity', component: ActivityView, meta: {requiresAuth: true} },
 		{ path: '/login', component: LoginView }
 	],
 })
