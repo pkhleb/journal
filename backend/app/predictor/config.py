@@ -9,6 +9,9 @@ quietly disagree with each other. Everything importing any of these values
 should import from here, not redefine them locally.
 """
 
+import hashlib
+import json
+
 # The five validated features currently in production. Order matters here —
 # it's the canonical ordering used to build feature vectors as arrays
 # wherever numpy is involved (mixer.py's _to_matrix).
@@ -39,3 +42,24 @@ MIN_PHASE_SUPPORT = 2
 # feature computation still exists in features.py for future
 # reconsideration with more data, but it's intentionally left out of
 # FEATURE_ORDER/DEFAULT_WEIGHTS above so it isn't live.
+
+def _digest(obj) -> str:
+    return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()[:10]
+
+# Identifies the *shape* of the model: which features exist, in what order.
+# Stored alongside each user's learned weights. If it doesn't match, those
+# weights were learned for a different features set and are discarded rather
+# than served - a row written before a feature existed would otherwise score
+# that feature at weight 0 and quietly serve an unvalidated model.
+
+FEATURE_SIGNATURE = _digest(FEATURE_ORDER)
+
+# Identifies the full configuration (features, default weights, phase
+# parameters). Stamped on every prediction event so hit rates can be grouped
+# by the config that produced them, and a metric shift tied to a deploy.
+CONFIG_VERSION = _digest({
+    "features": FEATURE_ORDER,
+    "default_weights": DEFAULT_WEIGHTS,
+    "phase_cutoff": PHASE_CUTOFF,
+    "min_phase_support": MIN_PHASE_SUPPORT,
+})
