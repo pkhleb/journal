@@ -7,9 +7,16 @@ from sqlalchemy import select
 from app import models
 from app.predictor.features import get_session_aggregates, build_candidates
 from app.predictor.mixer import weight_candidates, apply_miss_only_update, DEFAULT_WEIGHTS
+from app.predictor.config import FEATURE_ORDER, FEATURE_SIGNATURE, CONFIG_VERSION
 
 LOCAL_TZ = ZoneInfo("America/New_York")
 STALE_CUTOFF = timedelta(minutes=45)
+
+# Reserved key inside the persisted weights JSON. Holds the FEATURE_SIGNATURE
+# the weights were learned under; never part of the weights handed to the mixer
+# or logged on events.
+
+SIGNATURE_KEY = "_feature_signature"
 
 # In-memory per-user cache of the expensive aggregate computation, keyed by
 # user_id -> {"aggregates": ..., "day": date}. Single-process assumption —
@@ -38,7 +45,9 @@ async def _get_weights(db: AsyncSession, user_id: int) -> dict:
         select(models.ModelWeights).where(models.ModelWeights.user_id == user_id)
     )
     row = result.scalar_one_or_none()
-    return {**DEFAULT_WEIGHTS, **row.weights} if row else DEFAULT_WEIGHTS
+    if row is None or row_weights.get(SIGNATURE_KEY) != FEATURE_SIGNATURE:
+        return dict(DEFAULT_WEIGHTS)
+    return {k: row.weights.get(k, DEFAULT_WEIGHTS[k]) for k in FEATURE_ORDER}
 
 
 async def predict(
@@ -76,6 +85,7 @@ async def predict(
         "candidates": candidates,
         "ranked_exercises": ranked_names,
         "weights_snapshot": weights,
+        "config_version": CONFIG_VERSION,
         "prediction_created_at": now.isoformat(),
     }
 
@@ -138,10 +148,11 @@ async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
     )
 
     if info["updated"]:
+        stored = {**new_weights, SIGNATURE_KEY: FEATURE_SIGNATURE}
         if weights_row:
-            weights_row.weights = new_weights
+            weights_row.weights = stored
         else:
-            db.add(models.ModelWeights(user_id=user_id, weights=new_weights))
+            db.add(models.ModelWeights(user_id=user_id, weights=stored))
 
     event.resolved = True
     event.resolved_at = now
