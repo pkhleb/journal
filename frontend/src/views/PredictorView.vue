@@ -13,6 +13,25 @@
     </template>
 
     <template v-else>
+      <div v-if="versions.length > 1" class="version-bar">
+        <p class="version-label">config version</p>
+        <div class="version-buttons">
+          <button
+            v-for="v in versions"
+            :key="v.key"
+            type="button"
+            class="version-btn"
+            :class="{ active: v.key === selectedVersion }"
+            :aria-pressed="v.key === selectedVersion"
+            @click="selectedVersion = v.key"
+          >
+            <span class="version-swatch" :style="{ background: versionColor(v) }"></span>
+            {{ v.label }}
+            <span class="version-count">{{ v.resolved }}</span>
+          </button>
+        </div>
+      </div>
+
       <div class="stat-grid">
         <div class="stat-tile">
           <p class="stat-value">{{ stats.total }}</p>
@@ -34,7 +53,10 @@
 
       <div class="chart-section">
         <p class="section-title">cumulative hit rate</p>
-        <div v-if="hitRateSeries.length === 0" class="empty-state">no resolved predictions yet</div>
+        <p v-if="versions.length > 1" class="section-note">
+          one line per config version, each counted from its own first prediction
+        </p>
+        <div v-if="hitRateDatasets.length === 0" class="empty-state">no resolved predictions yet</div>
         <canvas v-else ref="hitRateChart" height="220"></canvas>
       </div>
 
@@ -51,6 +73,9 @@
 
       <div class="chart-section">
         <p class="section-title">feature weight evolution</p>
+        <p v-if="versions.length > 1" class="section-note">
+          showing config version {{ selectedLabel }}
+        </p>
         <div v-if="weightSeries.labels.length === 0" class="empty-state">weights haven't updated yet</div>
         <canvas v-else ref="weightChart" height="260"></canvas>
       </div>
@@ -90,6 +115,15 @@ const ACCENT = () => (prefersDark() ? '#97c459' : '#1D9E75')
 const events = ref([])
 const loading = ref(true)
 
+// Events from before config versioning shipped carry no config_version. They
+// were also served by a mismatched model (see predictor/README), so they get
+// their own muted group rather than being folded into a real version.
+const UNVERSIONED = '__unversioned__'
+const UNVERSIONED_COLOR = '#888780'
+const selectedVersion = ref(UNVERSIONED)
+
+const versionKey = (e) => e.data?.config_version || UNVERSIONED
+
 const hitRateChart = ref(null)
 const rankChart = ref(null)
 const latencyChart = ref(null)
@@ -103,6 +137,7 @@ async function fetchMetrics() {
   loading.value = true
   const res = await apiFetch('/predictor/metrics')
   events.value = await res.json()
+  selectedVersion.value = latestVersion.value
   loading.value = false
 }
 
@@ -115,9 +150,53 @@ const resolvedEvents = computed(() =>
     .sort((a, b) => new Date(a.resolved_at) - new Date(b.resolved_at))
 )
 
+// One entry per config version, oldest first. The latest is whichever version
+// produced the most recent event; it's what the page opens on, since metrics
+// are only comparable within a version.
+const versions = computed(() => {
+  const byKey = new Map()
+  for (const e of events.value) {
+    const key = versionKey(e)
+    const created = new Date(e.created_at).getTime()
+    if (!byKey.has(key)) {
+      byKey.set(key, { key, label: key === UNVERSIONED ? 'pre-versioning' : key, first: created, last: created, resolved: 0 })
+    }
+    const v = byKey.get(key)
+    v.first = Math.min(v.first, created)
+    v.last = Math.max(v.last, created)
+  }
+  for (const e of resolvedEvents.value) byKey.get(versionKey(e)).resolved++
+  return [...byKey.values()].sort((a, b) => a.first - b.first)
+})
+
+const latestVersion = computed(() => {
+  const list = versions.value
+  return list.length ? list.reduce((a, b) => (b.last > a.last ? b : a)).key : UNVERSIONED
+})
+
+const selectedLabel = computed(
+  () => versions.value.find(v => v.key === selectedVersion.value)?.label ?? ''
+)
+
+const scopedEvents = computed(() =>
+  events.value.filter(e => versionKey(e) === selectedVersion.value)
+)
+const scopedResolved = computed(() =>
+  resolvedEvents.value.filter(e => versionKey(e) === selectedVersion.value)
+)
+
+// A lone version keeps the page's accent colour; with several, the unversioned
+// group is grey and real versions take categorical slots in order.
+function versionColor(v) {
+  if (versions.value.length === 1) return ACCENT()
+  if (v.key === UNVERSIONED) return UNVERSIONED_COLOR
+  const real = versions.value.filter(x => x.key !== UNVERSIONED)
+  return seriesColor(FEATURE_ORDER[real.findIndex(x => x.key === v.key) % FEATURE_ORDER.length])
+}
+
 const stats = computed(() => {
-  const total = events.value.length
-  const resolved = resolvedEvents.value
+  const total = scopedEvents.value.length
+  const resolved = scopedResolved.value
   const hits = resolved.filter(e => e.data.hit).length
   const hitRatePct = resolved.length
     ? `${Math.round((hits / resolved.length) * 100)}%`
@@ -126,7 +205,7 @@ const stats = computed(() => {
   const avgRank = ranks.length
     ? (ranks.reduce((a, b) => a + b, 0) / ranks.length + 1).toFixed(2)
     : '—'
-  const latencies = events.value.map(e => e.latency_ms).filter(l => l != null)
+  const latencies = scopedEvents.value.map(e => e.latency_ms).filter(l => l != null)
   const avgLatency = latencies.length
     ? `${Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length)} ms`
     : '—'
@@ -134,18 +213,27 @@ const stats = computed(() => {
 })
 
 // Running hit rate as predictions accumulate, rather than a per-day rate
-// that's mostly noise at low volume.
-const hitRateSeries = computed(() => {
-  let hits = 0
-  return resolvedEvents.value.map((e, i) => {
-    if (e.data.hit) hits += 1
-    return { x: new Date(e.resolved_at), y: (hits / (i + 1)) * 100 }
-  })
-})
+// that's mostly noise at low volume. One series per config version, each
+// restarting from zero so a deploy's effect isn't diluted by the history
+// before it. Versions with nothing resolved yet are left out.
+const hitRateDatasets = computed(() =>
+  versions.value
+    .map(v => {
+      let hits = 0
+      const points = resolvedEvents.value
+        .filter(e => versionKey(e) === v.key)
+        .map((e, i) => {
+          if (e.data.hit) hits += 1
+          return { x: new Date(e.resolved_at), y: (hits / (i + 1)) * 100, n: i + 1 }
+        })
+      return { version: v, points }
+    })
+    .filter(d => d.points.length > 0)
+)
 
 const rankCounts = computed(() => {
   const buckets = { '1st': 0, '2nd': 0, '3rd': 0, '4th+': 0 }
-  for (const e of resolvedEvents.value) {
+  for (const e of scopedResolved.value) {
     const r = e.data.rank
     if (r === 0) buckets['1st']++
     else if (r === 1) buckets['2nd']++
@@ -157,7 +245,7 @@ const rankCounts = computed(() => {
 })
 
 const latencySeries = computed(() =>
-  events.value
+  scopedEvents.value
     .filter(e => e.latency_ms != null)
     .slice()
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
@@ -168,7 +256,7 @@ const latencySeries = computed(() =>
 // natural x-axis for "how did the model evolve", skipping hits that left
 // weights untouched.
 const weightSeries = computed(() => {
-  const updates = resolvedEvents.value.filter(e => e.data.updated && e.data.weights_after)
+  const updates = scopedResolved.value.filter(e => e.data.updated && e.data.weights_after)
   const labels = updates.map(e => new Date(e.resolved_at))
   const byFeature = {}
   for (const feature of FEATURE_ORDER) {
@@ -178,25 +266,36 @@ const weightSeries = computed(() => {
 })
 
 function buildHitRateChart() {
-  if (!hitRateChart.value || hitRateSeries.value.length === 0) return
+  if (!hitRateChart.value || hitRateDatasets.value.length === 0) return
   if (hitRateInstance) hitRateInstance.destroy()
+  const multiple = versions.value.length > 1
   hitRateInstance = new Chart(hitRateChart.value, {
     type: 'line',
     data: {
-      datasets: [{
-        data: hitRateSeries.value,
-        borderColor: ACCENT(),
+      datasets: hitRateDatasets.value.map(({ version, points }) => ({
+        label: `${version.label} · n=${points.length}`,
+        data: points,
+        borderColor: versionColor(version),
         backgroundColor: 'transparent',
         pointRadius: 0,
-        borderWidth: 2,
+        // The version the rest of the page is showing reads heavier.
+        borderWidth: multiple && version.key !== selectedVersion.value ? 1.5 : 2.5,
         tension: 0.2,
-      }],
+      })),
     },
     options: {
       responsive: true,
       plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => `${ctx.parsed.y.toFixed(1)}% cumulative hit rate` } },
+        legend: {
+          display: multiple,
+          position: 'bottom',
+          labels: { color: '#888780', font: { family: 'DM Mono', size: 10 }, boxWidth: 12 },
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label.split(' · ')[0]}: ${ctx.parsed.y.toFixed(1)}% after ${ctx.raw.n}`,
+          },
+        },
       },
       scales: {
         x: {
@@ -298,7 +397,9 @@ function buildWeightChart() {
     type: 'line',
     data: {
       labels,
-      datasets: FEATURE_ORDER.map(feature => ({
+      // Skip features the selected version never had (e.g. the two added after
+      // the pre-versioning era) so the legend only lists real lines.
+      datasets: FEATURE_ORDER.filter(f => byFeature[f].some(v => v != null)).map(feature => ({
         label: feature.replace('_', ' '),
         data: byFeature[feature],
         borderColor: seriesColor(feature),
@@ -351,7 +452,7 @@ onMounted(async () => {
   buildAllCharts()
 })
 
-watch([hitRateSeries, rankCounts, latencySeries, weightSeries], async () => {
+watch([hitRateDatasets, rankCounts, latencySeries, weightSeries, selectedVersion], async () => {
   await nextTick()
   buildAllCharts()
 })
@@ -392,6 +493,34 @@ watch([hitRateSeries, rankCounts, latencySeries, weightSeries], async () => {
   font-family: 'DM Mono', monospace; font-size: 10px;
   letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--color-text-muted); margin-top: 4px;
+}
+
+.version-bar { margin-bottom: 1.5rem; }
+.version-label {
+  font-family: 'DM Mono', monospace; font-size: 10px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--color-text-muted); margin-bottom: 8px;
+}
+.version-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.version-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--color-text-muted); background: transparent;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md); padding: 5px 10px; cursor: pointer;
+}
+.version-btn:hover { color: var(--color-text-primary); }
+.version-btn.active {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
+}
+.version-swatch { width: 8px; height: 8px; border-radius: 50%; }
+.version-count { opacity: 0.6; }
+
+.section-note {
+  font-family: 'Lora', serif; font-style: italic;
+  font-size: 13px; color: var(--color-text-muted);
+  margin: -0.5rem 0 1rem;
 }
 
 .chart-section { margin-bottom: 2rem; }
