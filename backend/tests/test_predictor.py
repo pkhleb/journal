@@ -67,7 +67,7 @@ async def add_ranking_history(db, user_id: int):
         for i, name in enumerate(["Squat", "Bench", "Row", "Curl", "Plank"]):
             await add_exercise_entry(db, user_id, name, start + timedelta(minutes=10 * i))
     await add_exercise_entry(db, user_id, "Plank", FROZEN_NOW - timedelta(hours=20))
-    await add_exercise_entry(db, user_id, "Squat", FROZEN_now - timedelta(hours=19))
+    await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(hours=19))
 
 class TestPredictorEndpointWiring:
     """Goes through the real HTTP endpoints rather than calling the
