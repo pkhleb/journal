@@ -277,7 +277,7 @@ class TestPredictorWeightsCompatibility:
         weights_row = await get_weights_row(user_id)
 
         # The event was scored against the weights that were actually served.
-        assert events[-1].data["weights_before"] == DEFAULT_WEGHTS
+        assert events[-1].data["weights_before"] == DEFAULT_WEIGHTS
         assert events[-1].data["updated"] is True
         assert weights_row.weights[predictor.SIGNATURE_KEY] == FEATURE_SIGNATURE
         assert set(weights_row.weights) == set(FEATURE_ORDER) | {predictor.SIGNATURE_KEY}
