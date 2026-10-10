@@ -66,7 +66,9 @@ jobs:
         with:
           context: ./backend
           push: true
-          tags: ghcr.io/pkhleb/journal-backend:latest
+          tags: |
+            ghcr.io/pkhleb/journal-backend:latest
+            ghcr.io/pkhleb/journal-backend:${{ github.sha }}
           labels: |
             org.opencontainers.image.source=https://github.com/pkhleb/journal
 
