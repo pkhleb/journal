@@ -45,6 +45,11 @@ async def _get_weights(db: AsyncSession, user_id: int) -> dict:
         select(models.ModelWeights).where(models.ModelWeights.user_id == user_id)
     )
     row = result.scalar_one_or_none()
+    # A row learned under a different feature seet (or written before the
+    # signature existed) is ignored, not patched up: its legacy weights were
+    # tuned without the newer features, so mixing in defaults for the missing
+    # ones would serve a combination nobody validated. The row is replaced on
+    # the user's next update.
     if row is None or row_weights.get(SIGNATURE_KEY) != FEATURE_SIGNATURE:
         return dict(DEFAULT_WEIGHTS)
     return {k: row.weights.get(k, DEFAULT_WEIGHTS[k]) for k in FEATURE_ORDER}
