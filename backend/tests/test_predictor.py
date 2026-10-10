@@ -271,7 +271,7 @@ class TestPredictorWeightsCompatibility:
             await add_exercise_entry(db, user_id, "OHP", FROZEN_NOW - timedelta(days=10))
             await add_exercise_entry(db, user_id, "Curl", FROZEN_NOW - timedelta(days=40))
             await predictor.predict(db, user_id, last_exercise="Deadlift", now=FROZEN_NOW)
-            await predictor.resolve(db, user_id, chosed_exercise="Curl")
+            await predictor.resolve(db, user_id, chosen_exercise="Curl")
 
         events = await get_events(user_id)
         weights_row = await get_weights_row(user_id)
@@ -301,7 +301,7 @@ class TestPredictorWeightsCompatibility:
         assert events[-1].data["weights_snapshot"] == learned
 
     async def test_events_are_stamped_with_the_config_version(self, auth_client):
-        user_id: await get_test_user_id()
+        user_id = await get_test_user_id()
         async with TestSessionLocal() as db:
             await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
             await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
