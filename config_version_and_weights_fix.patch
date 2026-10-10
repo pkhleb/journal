@@ -1,0 +1,303 @@
+diff --git a/backend/app/predictor/README.md b/backend/app/predictor/README.md
+index 9a82127..df36d4c 100644
+--- a/backend/app/predictor/README.md
++++ b/backend/app/predictor/README.md
+@@ -10,14 +10,25 @@ The predictor module ranks exercises using a lightweight feature model and updat
+ 
+ ## Scoring logic
+ 
+-The candidate features use:
++The candidate features (`FEATURE_ORDER` in `config.py`) are:
+ 
+ - transition score: how often the previous exercise was followed by the candidate
++- phase transition score: the same, but conditioned on early vs late in the session, backing off to the global transition when phase-specific data is sparse
+ - weekday score: how often the user performs the exercise on the current weekday
++- position frequency: how often the candidate appears at this exact position in a session
+ - recency score: a decay-based freshness signal
+ 
+ The final weights are stored in `ModelWeights` and are updated after a user resolves a prediction event.
+ 
++## Versioning and stored weights
++
++`config.py` defines two identifiers:
++
++- `FEATURE_SIGNATURE`: hash of `FEATURE_ORDER`. Stored inside each user's weights row (under the reserved key `_feature_signature`). A row whose signature doesn't match the current feature set, or that has no signature, is ignored and `DEFAULT_WEIGHTS` are served until the user's next update replaces it. Adding or removing a feature therefore resets learned weights automatically.
++- `CONFIG_VERSION`: hash of the features, default weights and phase parameters. Stamped on every prediction event as `data.config_version`, so hit rates can be grouped by the configuration that produced them. Compare hit rates only within one version.
++
++Why: scoring treats a missing weight as 0, while the update path fills it from defaults. A row written before a feature existed would silently serve that feature at weight 0 and log hits against a different model than the one served.
++
+ ## Data flow
+ 
+ 1. `service.predict()` fetches candidate exercise names and feature vectors.
+diff --git a/backend/app/predictor/config.py b/backend/app/predictor/config.py
+index d7a2fab..e6e383d 100644
+--- a/backend/app/predictor/config.py
++++ b/backend/app/predictor/config.py
+@@ -9,6 +9,9 @@ quietly disagree with each other. Everything importing any of these values
+ should import from here, not redefine them locally.
+ """
+ 
++import hashlib
++import json
++
+ # The five validated features currently in production. Order matters here —
+ # it's the canonical ordering used to build feature vectors as arrays
+ # wherever numpy is involved (mixer.py's _to_matrix).
+@@ -39,3 +42,25 @@ MIN_PHASE_SUPPORT = 2
+ # feature computation still exists in features.py for future
+ # reconsideration with more data, but it's intentionally left out of
+ # FEATURE_ORDER/DEFAULT_WEIGHTS above so it isn't live.
++
++
++def _digest(obj) -> str:
++    return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()[:10]
++
++
++# Identifies the *shape* of the model: which features exist, in what order.
++# Stored alongside each user's learned weights. If it doesn't match, those
++# weights were learned for a different feature set and are discarded rather
++# than served — a row written before a feature existed would otherwise score
++# that feature at weight 0 and quietly serve an unvalidated model.
++FEATURE_SIGNATURE = _digest(FEATURE_ORDER)
++
++# Identifies the full configuration (features, default weights, phase
++# parameters). Stamped on every prediction event so hit rates can be grouped
++# by the config that produced them, and a metric shift tied to a deploy.
++CONFIG_VERSION = _digest({
++    "features": FEATURE_ORDER,
++    "default_weights": DEFAULT_WEIGHTS,
++    "phase_cutoff": PHASE_CUTOFF,
++    "min_phase_support": MIN_PHASE_SUPPORT,
++})
+diff --git a/backend/app/predictor/service.py b/backend/app/predictor/service.py
+index 27bf358..0a459ab 100644
+--- a/backend/app/predictor/service.py
++++ b/backend/app/predictor/service.py
+@@ -7,10 +7,16 @@ from sqlalchemy import select
+ from app import models
+ from app.predictor.features import get_session_aggregates, build_candidates
+ from app.predictor.mixer import weight_candidates, apply_miss_only_update, DEFAULT_WEIGHTS
++from app.predictor.config import FEATURE_ORDER, FEATURE_SIGNATURE, CONFIG_VERSION
+ 
+ LOCAL_TZ = ZoneInfo("America/New_York")
+ STALE_CUTOFF = timedelta(minutes=45)
+ 
++# Reserved key inside the persisted weights JSON. Holds the FEATURE_SIGNATURE
++# the weights were learned under; never part of the weights handed to the
++# mixer or logged on events.
++SIGNATURE_KEY = "_feature_signature"
++
+ # In-memory per-user cache of the expensive aggregate computation, keyed by
+ # user_id -> {"aggregates": ..., "day": date}. Single-process assumption —
+ # fine for one backend replica; would need something like Redis if this ever
+@@ -38,7 +44,14 @@ async def _get_weights(db: AsyncSession, user_id: int) -> dict:
+         select(models.ModelWeights).where(models.ModelWeights.user_id == user_id)
+     )
+     row = result.scalar_one_or_none()
+-    return row.weights if row else DEFAULT_WEIGHTS
++    # A row learned under a different feature set (or written before the
++    # signature existed) is ignored, not patched up: its legacy weights were
++    # tuned without the newer features, so mixing in defaults for the missing
++    # ones would serve a combination nobody validated. The row is replaced on
++    # the user's next update.
++    if row is None or row.weights.get(SIGNATURE_KEY) != FEATURE_SIGNATURE:
++        return dict(DEFAULT_WEIGHTS)
++    return {k: row.weights.get(k, DEFAULT_WEIGHTS[k]) for k in FEATURE_ORDER}
+ 
+ 
+ async def predict(
+@@ -76,6 +89,7 @@ async def predict(
+         "candidates": candidates,
+         "ranked_exercises": ranked_names,
+         "weights_snapshot": weights,
++        "config_version": CONFIG_VERSION,
+         "prediction_created_at": now.isoformat(),
+     }
+ 
+@@ -138,10 +152,11 @@ async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
+     )
+ 
+     if info["updated"]:
++        stored = {**new_weights, SIGNATURE_KEY: FEATURE_SIGNATURE}
+         if weights_row:
+-            weights_row.weights = new_weights
++            weights_row.weights = stored
+         else:
+-            db.add(models.ModelWeights(user_id=user_id, weights=new_weights))
++            db.add(models.ModelWeights(user_id=user_id, weights=stored))
+ 
+     event.resolved = True
+     event.resolved_at = now
+diff --git a/backend/tests/test_predictor.py b/backend/tests/test_predictor.py
+index b6ec0e2..836d8f5 100644
+--- a/backend/tests/test_predictor.py
++++ b/backend/tests/test_predictor.py
+@@ -3,10 +3,23 @@ from sqlalchemy import select
+ from tests.conftest import TestSessionLocal
+ from app import models
+ from app.predictor import service as predictor 
+-from app.predictor.mixer import DEFAULT_WEIGHTS
++from app.predictor.mixer import DEFAULT_WEIGHTS, weight_candidates
++from app.predictor.config import FEATURE_ORDER, FEATURE_SIGNATURE, CONFIG_VERSION
+ 
+ FROZEN_NOW = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
+ 
++# The row production actually held when the incident was found: written before
++# phase_transition/position_freq existed, so it has three keys and no
++# signature. Served as-is, the two newer features score at weight 0.
++LEGACY_WEIGHTS = {
++    "recency": 0.16267394841208443,
++    "weekday": 0.08701475650835418,
++    "transition": 0.2698653601483609,
++}
++# Deliberately lopsided legacy row, so serving it visibly changes the ranking
++# on the history built by add_ranking_history().
++SKEWED_LEGACY_WEIGHTS = {"transition": 0.0, "weekday": 0.0, "recency": 1.0}
++
+ async def get_test_user_id(email: str = "test@example.com") -> int:
+     async with TestSessionLocal() as db:
+         result = await db.execute(select(models.User).where(models.User.email == email))
+@@ -37,6 +50,23 @@ async def get_weights_row(user_id: int):
+         )
+         return result.scalar_one_or_none()
+ 
++async def set_weights_row(user_id: int, weights: dict):
++    async with TestSessionLocal() as db:
++        db.add(models.ModelWeights(user_id=user_id, weights=weights))
++        await db.commit()
++
++async def add_ranking_history(db, user_id: int):
++    """Two identical sessions plus a recent Plank/Squat. With last_exercise
++    "Bench", DEFAULT_WEIGHTS rank Row first while a recency-only weighting
++    ranks Squat first, so the two are distinguishable by ranking alone."""
++    base = FROZEN_NOW - timedelta(days=14)
++    for week in range(2):
++        start = base + timedelta(days=7 * week)
++        for i, name in enumerate(["Squat", "Bench", "Row", "Curl", "Plank"]):
++            await add_exercise_entry(db, user_id, name, start + timedelta(minutes=10 * i))
++    await add_exercise_entry(db, user_id, "Plank", FROZEN_NOW - timedelta(hours=20))
++    await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(hours=19))
++
+ class TestPredictorEndpointWiring:
+     """Goes through the real HTTP endpoints rather than calling the
+     predictor module directly - this is what would have caught the missing
+@@ -179,6 +209,119 @@ class TestPredictorMissOnlyUpdate:
+         assert events[0].data["prediction_created_at"] == FROZEN_NOW.isoformat()
+ 
+ 
++class TestPredictorWeightsCompatibility:
++    """A stored weights row must never silently outlive the feature set it
++    was learned for. Production served a three-key row after two features
++    were added: scoring read the missing keys as weight 0 while the update
++    path filled them from defaults, so the model that was served differed
++    from the one that was validated and from the one that got scored."""
++
++    async def test_legacy_row_without_signature_is_ignored(self, auth_client):
++        user_id = await get_test_user_id()
++        await set_weights_row(user_id, LEGACY_WEIGHTS)
++        async with TestSessionLocal() as db:
++            await add_ranking_history(db, user_id)
++            await predictor.predict(db, user_id, last_exercise="Bench", now=FROZEN_NOW)
++
++        events = await get_events(user_id)
++        assert events[-1].data["weights_snapshot"] == DEFAULT_WEIGHTS
++
++    async def test_legacy_row_does_not_change_the_ranking(self, auth_client):
++        user_id = await get_test_user_id()
++        await set_weights_row(user_id, SKEWED_LEGACY_WEIGHTS)
++        async with TestSessionLocal() as db:
++            await add_ranking_history(db, user_id)
++            ranked = await predictor.predict(db, user_id, last_exercise="Bench", now=FROZEN_NOW)
++
++        events = await get_events(user_id)
++        expected = weight_candidates(events[-1].data["candidates"], DEFAULT_WEIGHTS)
++        assert ranked == expected
++        assert ranked[0] == "Row"  # recency-only weighting would put Squat first
++
++    async def test_row_with_other_feature_signature_is_ignored(self, auth_client):
++        user_id = await get_test_user_id()
++        await set_weights_row(user_id, {
++            **{k: 0.5 for k in FEATURE_ORDER},
++            predictor.SIGNATURE_KEY: "learned-for-another-feature-set",
++        })
++        async with TestSessionLocal() as db:
++            await add_ranking_history(db, user_id)
++            await predictor.predict(db, user_id, last_exercise="Bench", now=FROZEN_NOW)
++
++        events = await get_events(user_id)
++        assert events[-1].data["weights_snapshot"] == DEFAULT_WEIGHTS
++
++    async def test_row_with_current_signature_is_used(self, auth_client):
++        user_id = await get_test_user_id()
++        learned = {k: 0.1 * (i + 1) for i, k in enumerate(FEATURE_ORDER)}
++        await set_weights_row(user_id, {**learned, predictor.SIGNATURE_KEY: FEATURE_SIGNATURE})
++        async with TestSessionLocal() as db:
++            await add_ranking_history(db, user_id)
++            await predictor.predict(db, user_id, last_exercise="Bench", now=FROZEN_NOW)
++
++        events = await get_events(user_id)
++        snapshot = events[-1].data["weights_snapshot"]
++        assert snapshot == learned
++        assert predictor.SIGNATURE_KEY not in snapshot
++
++    async def test_miss_replaces_legacy_row_with_a_complete_signed_one(self, auth_client):
++        user_id = await get_test_user_id()
++        await set_weights_row(user_id, LEGACY_WEIGHTS)
++        async with TestSessionLocal() as db:
++            await add_exercise_entry(db, user_id, "Deadlift", FROZEN_NOW - timedelta(days=1))
++            await add_exercise_entry(db, user_id, "Row", FROZEN_NOW - timedelta(days=5))
++            await add_exercise_entry(db, user_id, "OHP", FROZEN_NOW - timedelta(days=10))
++            await add_exercise_entry(db, user_id, "Curl", FROZEN_NOW - timedelta(days=40))
++            await predictor.predict(db, user_id, last_exercise="Deadlift", now=FROZEN_NOW)
++            await predictor.resolve(db, user_id, chosen_exercise="Curl")
++
++        events = await get_events(user_id)
++        weights_row = await get_weights_row(user_id)
++
++        # The event was scored against the weights that were actually served.
++        assert events[-1].data["weights_before"] == DEFAULT_WEIGHTS
++        assert events[-1].data["updated"] is True
++        assert weights_row.weights[predictor.SIGNATURE_KEY] == FEATURE_SIGNATURE
++        assert set(weights_row.weights) == set(FEATURE_ORDER) | {predictor.SIGNATURE_KEY}
++
++    async def test_learned_weights_are_served_on_the_next_prediction(self, auth_client):
++        user_id = await get_test_user_id()
++        async with TestSessionLocal() as db:
++            await add_exercise_entry(db, user_id, "Deadlift", FROZEN_NOW - timedelta(days=1))
++            await add_exercise_entry(db, user_id, "Row", FROZEN_NOW - timedelta(days=5))
++            await add_exercise_entry(db, user_id, "OHP", FROZEN_NOW - timedelta(days=10))
++            await add_exercise_entry(db, user_id, "Curl", FROZEN_NOW - timedelta(days=40))
++            await predictor.predict(db, user_id, last_exercise="Deadlift", now=FROZEN_NOW)
++            await predictor.resolve(db, user_id, chosen_exercise="Curl")
++            await predictor.predict(db, user_id, last_exercise="Deadlift", now=FROZEN_NOW)
++
++        events = await get_events(user_id)
++        weights_row = await get_weights_row(user_id)
++        learned = {k: weights_row.weights[k] for k in FEATURE_ORDER}
++
++        assert learned != DEFAULT_WEIGHTS
++        assert events[-1].data["weights_snapshot"] == learned
++
++    async def test_events_are_stamped_with_the_config_version(self, auth_client):
++        user_id = await get_test_user_id()
++        async with TestSessionLocal() as db:
++            await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
++            await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
++
++            events = await get_events(user_id)
++            assert events[-1].data["config_version"] == CONFIG_VERSION
++
++            # Resolving must not drop the stamp.
++            await predictor.resolve(db, user_id, chosen_exercise="Squat")
++
++        events = await get_events(user_id)
++        assert events[-1].resolved is True
++        assert events[-1].data["config_version"] == CONFIG_VERSION
++
++        res = await auth_client.get("/api/predictor/metrics")
++        assert res.json()[0]["data"]["config_version"] == CONFIG_VERSION
++
++
+ class TestPredictorMetricsEndpoint:
+     """/api/predictor/metrics must be scoped to the caller - it's easy to
+     forget the user_id filter here since current_user is otherwise only

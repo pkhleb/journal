@@ -38,7 +38,7 @@ async def _get_weights(db: AsyncSession, user_id: int) -> dict:
         select(models.ModelWeights).where(models.ModelWeights.user_id == user_id)
     )
     row = result.scalar_one_or_none()
-    return row.weights if row else DEFAULT_WEIGHTS
+    return {**DEFAULT_WEIGHTS, **row.weights} if row else DEFAULT_WEIGHTS
 
 
 async def predict(
