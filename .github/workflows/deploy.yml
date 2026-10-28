@@ -109,6 +109,7 @@ jobs:
           script: |
             cd ~/journal
             git pull
-            docker compose pull backend
-            docker compose build frontend
-            docker compose up -d
+            # Explicit -f so the dev-only docker-compose.override.yml is never merged in.
+            docker compose -f docker-compose.yml pull backend
+            docker compose -f docker-compose.yml build frontend
+            docker compose -f docker-compose.yml up -d

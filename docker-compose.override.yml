@@ -1,0 +1,77 @@
+# Local development stack. Docker Compose merges this file onto docker-compose.yml
+# automatically, so after a `git pull` this is all you need:
+#
+#     docker compose up
+#
+#   App (with hot reload):  http://localhost:5173
+#   API docs:               http://localhost:8000/docs
+#   Dev login:              dev@local.dev / devpassword123
+#   Run backend tests:      docker compose exec backend pytest tests/ -v
+#
+# Production deploys must NOT merge this file: deploy.yml runs
+# `docker compose -f docker-compose.yml ...` explicitly. If you run compose by
+# hand on the server, do the same (or set COMPOSE_FILE=docker-compose.yml).
+
+services:
+  db:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  # Throwaway database for pytest: no volume, so it is wiped whenever it is recreated.
+  db-test:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: journal_test
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: journal_test
+    ports:
+      - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U journal_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: journal-backend:dev
+    build: ./backend
+    command: ["sh", "./entrypoint.dev.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+      db-test:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://journal:${POSTGRES_PASSWORD:-devpassword}@db:5432/journal
+      TEST_DATABASE_URL: postgresql+asyncpg://journal_test:testpassword@db-test:5432/journal_test
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      FRONTEND_URL: http://localhost:5173
+    volumes:
+      - ./backend:/app
+    ports:
+      - "127.0.0.1:8000:8000"
+
+  # Vite dev server instead of the production nginx image.
+  frontend:
+    image: node:22-alpine
+    build: !reset null
+    working_dir: /app
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0"
+    environment:
+      API_PROXY_TARGET: http://backend:8000
+      VITE_USE_POLLING: "true"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    ports:
+      - "127.0.0.1:5173:5173"
+
+  # Caddy only serves the real domain with HTTPS; skip it locally.
+  caddy:
+    profiles: ["prod"]
+
+volumes:
+  frontend_node_modules:
