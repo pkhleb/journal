@@ -36,6 +36,18 @@ class TestRegister:
             "password": "password123"
         })
         assert res.status_code == 400
+
+    async def test_register_email_and_username_belong_to_different_users(self, client):
+        for email, username in [("a@example.com", "usera"), ("b@example.com", "userb")]:
+            await client.post("/api/users/register", json={
+                "email": email, "username": username, "password": "password123"
+            })
+        res = await client.post("/api/users/register", json={
+            "email": "a@example.com",
+            "username": "userb",
+            "password": "password123"
+        })
+        assert res.status_code == 400
         
 class TestLogin:
     async def test_login_unverified(self, client):

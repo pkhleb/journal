@@ -33,7 +33,7 @@ async def register(request: Request, user: schemas.UserCreate, db: AsyncSession 
             (models.User.email == user.email) | (models.User.username == user.username)
         )
     )
-    if existing.scalar_one_or_none():
+    if existing.scalars().first():
         raise HTTPException(400, "Email or username already taken")
     token = generate_verification_token()
     db_user = models.User(
