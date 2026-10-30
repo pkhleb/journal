@@ -1,3 +1,4 @@
+import os
 import pytest
 import pytest_asyncio
 from unittest.mock import patch, AsyncMock
@@ -7,7 +8,12 @@ from sqlalchemy.orm import sessionmaker
 from app.database import Base, get_db
 from main import app
 
-TEST_DATABASE_URL = "postgresql+asyncpg://journal_test:testpassword@localhost:5433/journal_test"
+# Inside the dev compose stack this points at the db-test service; on the host
+# (and in CI) it falls back to the port published on localhost.
+TEST_DATABASE_URL = os.environ.get(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://journal_test:testpassword@localhost:5433/journal_test",
+)
 
 test_engine = create_async_engine(TEST_DATABASE_URL, echo=False)
 TestSessionLocal = sessionmaker(

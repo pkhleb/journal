@@ -163,42 +163,44 @@ Production runs as Docker Compose services (PostgreSQL, backend, nginx for the s
 
 ## Running it locally
 
-**Run the tests** (Docker for the test database; Python 3.12):
+Requires Docker with Compose v2.24+. No `.env`, no manual database setup:
 
 ```bash
-docker compose up -d db-test            # Postgres on localhost:5433
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-SECRET_KEY=test DATABASE_URL=postgresql+asyncpg://journal_test:testpassword@localhost:5433/journal_test \
-  pytest tests/ -v
+git pull
+docker compose up
 ```
 
-**Run the API against a development database.** The baseline Alembic migration is an empty stamp of a pre-existing schema, so `alembic upgrade head` fails on a brand-new database. Create the tables from the models first, then stamp:
+| | |
+|---|---|
+| App (Vite, hot reload) | http://localhost:5173 |
+| API docs | http://localhost:8000/docs |
+| Dev login | `dev@local.dev` / `devpassword123` (verified, admin) |
+| Dev database | `localhost:5432` (persisted in a volume) |
+| Test database | `localhost:5434` (throwaway, no volume) |
+
+`docker-compose.override.yml` is merged automatically and adds the dev-only pieces: a bind-mounted backend running `uvicorn --reload`, a Vite dev server proxying `/api` to the backend, and a test database. On startup [`dev_bootstrap.py`](backend/dev_bootstrap.py) prepares the dev database: the baseline Alembic migration is an empty stamp of a pre-existing schema, so on a fresh database it creates the tables from the models and stamps `head`; on an existing one it runs `alembic upgrade head`. It also seeds the dev user. Caddy is skipped locally.
+
+**Run the backend tests** (the test database is already up):
 
 ```bash
-cd backend
-export SECRET_KEY=dev DATABASE_URL=postgresql+asyncpg://USER:PASS@localhost:5432/journal
-
-python - <<'EOF'
-import asyncio
-from app.database import engine, Base
-from app import models  # registers the tables
-
-async def main():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-
-asyncio.run(main())
-EOF
-
-alembic stamp head
-uvicorn main:app --reload
+docker compose exec backend pytest tests/ -v
 ```
 
-Sending a real verification email needs `RESEND_API_KEY` and `FRONTEND_URL`. For local use, [`import.py`](backend/import.py) seeds a pre-verified user (`test@local.dev`, password `testpassword123`) from a JSON export produced by the app's `/api/export/db` endpoint: `python import.py export.json`.
+**Run the experiments** against a scratch database (`journal_exp`, separate from the app's), loaded from a JSON export of your account:
 
-**Run the frontend:** `cd frontend && npm ci && npm run dev`. The app calls relative `/api` paths and the backend only allows the production CORS origin, so add a dev proxy to `vite.config.js` (`server: { proxy: { '/api': 'http://localhost:8000' } }`), which does the job Caddy does in production.
+```bash
+cp ~/Downloads/export.json backend/export.json            # git-ignored
+docker compose run --rm experiments setup                 # (re)creates journal_exp and loads the export
+docker compose run --rm experiments signals_validate      # any module in backend/experiments/
+```
+
+Re-run `setup` to refresh from a newer export. The scripts run as `test@local.dev`, the user `import.py` creates.
+
+**Reset the dev database:** `docker compose down -v`, then `docker compose up`.
+
+**Production** uses only `docker-compose.yml`; the deploy workflow passes `-f docker-compose.yml` so the override is never merged. Do the same if you run compose by hand on the server.
+
+Sending a real verification email needs `RESEND_API_KEY` (set it in your shell or a git-ignored `.env`). To load real data locally, [`import.py`](backend/import.py) seeds a pre-verified user (`test@local.dev`, password `testpassword123`) from a JSON export produced by the app's `/api/export/db` endpoint: `docker compose exec backend python import.py export.json`.
 
 **Run the experiments** against a database containing an exercise history:
 
