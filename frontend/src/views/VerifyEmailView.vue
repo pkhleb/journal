@@ -6,6 +6,9 @@
       <router-link v-if="success" to="/login" class="submit-btn" style="display:block;text-align:center;line-height:44px;text-decoration:none;">
         sign in
       </router-link>
+      <router-link v-else-if="!loading" to="/login" class="back-link">
+	back to sign in to request a new link
+      </router-link>
     </div>
   </div>
 </template>
@@ -18,6 +21,7 @@ const route = useRoute()
 const title = ref('verifying...')
 const message = ref('')
 const success = ref(false)
+const loading = ref(true)
 
 onMounted(async () => {
   const token = route.query.token
@@ -28,7 +32,7 @@ onMounted(async () => {
   }
 
   try {
-    const res = await fetch(`/api/users/verify-email?token=${token}`)
+    const res = await fetch(`/api/users/verify-email?token=${encodeURIComponent(token)}`)
     if (res.ok) {
       title.value = 'email verified'
       message.value = 'Your account is verified. You can now sign in.'
@@ -41,6 +45,8 @@ onMounted(async () => {
   } catch {
     title.value = 'verification failed'
     message.value = 'Something went wrong. Please try again.'
+  } finally {
+    loading.value = false
   }
 })
 </script>
@@ -90,4 +96,15 @@ onMounted(async () => {
   transition: background 0.12s;
 }
 .submit-btn:hover { background: var(--color-bg); }
+.back-link {
+  display: block;
+  text-align: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+.back-link:hover { color: var(--color-text-primary); }
 </style>
