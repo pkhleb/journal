@@ -149,7 +149,7 @@ class TestEmailVerification:
         
     async def test_resend_rotates_token(self, client):
         await self._register(client)
-        old = (aait self._get_user()).verification_token
+        old = (await self._get_user()).verification_token
         res = await client.post("/api/users/resend-verification", params={"email": "verify@example.com"})
         assert res.status_code == 200
         assert (await self._get_user()).verification_token != old
