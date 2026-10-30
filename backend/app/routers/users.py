@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -115,9 +115,12 @@ async def me(current_user: models.User = Depends(auth.get_current_user)):
     return current_user
 
 
-@router.get("/verify-email")
+@router.post("/verify-email")
 async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
-    """Mark a user as verified when the verification link is accepted.
+    """Mark a user as verified when the person confirms the verification link.
+
+    This is a POST (not a GET) so that mail scanners and link prefetchers that
+    follow URLs in emails cannot consume the single-use token.
 
     Args:
         token: Verification token included in the email link.
@@ -144,7 +147,7 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)):
 
 @router.post("/resend-verification")
 @limiter.limit("3/minute")
-async def resend_verification(request: Request, email: str, db: AsyncSession = Depends(get_db)):
+async def resend_verification(request: Request, email: str = Query(...), db: AsyncSession = Depends(get_db)):
     """Send a fresh verification email for a user who has not yet verified.
 
     Args:

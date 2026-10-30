@@ -3,10 +3,16 @@
     <div class="auth-card">
       <h1 class="auth-title">{{ title }}</h1>
       <p class="message">{{ message }}</p>
-      <router-link v-if="success" to="/login" class="submit-btn" style="display:block;text-align:center;line-height:44px;text-decoration:none;">
+      <button v-if="state === 'ready'" class="submit-btn" @click="verify">
+	verify my email
+      </button>
+      <button v-else-if="state === 'loading'" class="submit-btn" disabled>
+	please wait...
+      </button>
+      <router-link v-else-if="state === 'success'" to="/login" class="submit-btn" style="display:block;text-align:center;line-height:44px;text-decoration:none;">
         sign in
       </router-link>
-      <router-link v-else-if="!loading" to="/login" class="back-link">
+      <router-link v-else to="/login" class="back-link">
 	back to sign in to request a new link
       </router-link>
     </div>
@@ -14,41 +20,40 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
-const title = ref('verifying...')
-const message = ref('')
-const success = ref(false)
-const loading = ref(true)
+const token = route.query.token
 
-onMounted(async () => {
-  const token = route.query.token
-  if (!token) {
-    title.value = 'invalid link'
-    message.value = 'No verification token found.'
-    return
-  }
+// ready -> loading -> success | error. Verification only happens on an explicit
+// click (POST), so mail scanners that open the link can't consume the token.
+const state = ref(token ? 'ready' : 'error')
+const title = ref(token ? 'verify your email' : 'invalid link')
+const message = ref(token ? 'Confirm below to finish setting up your account.' : 'No verification token found.')
 
+async function verify() {
+  state.value = 'loading'
+  title.value = 'verifying...'
+  message.value = ''
   try {
-    const res = await fetch(`/api/users/verify-email?token=${encodeURIComponent(token)}`)
+    const res = await fetch(`/api/users/verify-email?token=${encodeURIComponent(token)}`, { method: 'POST' })
     if (res.ok) {
       title.value = 'email verified'
       message.value = 'Your account is verified. You can now sign in.'
-      success.value = true
+      state.value = 'success'
     } else {
-      const data = await res.json()
+      const data = await res.json().catch(() => ({}))
       title.value = 'verification failed'
-      message.value = data.detail || 'Something went wrong.'
+      message.value = typeof data.detail === 'string' ? data.detail : 'Something went wrong.'
+      state.value = 'error'
     }
   } catch {
     title.value = 'verification failed'
     message.value = 'Something went wrong. Please try again.'
-  } finally {
-    loading.value = false
+    state.value = 'error'
   }
-})
+}
 </script>
 
 <style scoped>
@@ -83,6 +88,7 @@ onMounted(async () => {
   line-height: 1.6;
 }
 .submit-btn {
+  width: 100%;
   height: 44px;
   font-family: 'DM Mono', monospace;
   font-size: 12px;
@@ -96,6 +102,7 @@ onMounted(async () => {
   transition: background 0.12s;
 }
 .submit-btn:hover { background: var(--color-bg); }
+.submit-btn:disbled { opacity: 0.5; cursor: not-allowed; }
 .back-link {
   display: block;
   text-align: center;
