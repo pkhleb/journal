@@ -108,3 +108,58 @@ class TestProtectedRoutes:
         client.headers.update({"Authorization": "Bearer faketoken"})
         res = await client.get("/api/entries")
         assert res.status_code == 401
+
+class TestEmailVerification:
+    async def _register(self, client, email="verify@example.com", username="verifyuser"):
+        await client.post("/api/users/register", json={
+            "email": email,
+            "username": username,
+            "password": "password123"
+        })
+
+    async def _get_user(self, email="verify@example.com"):
+        from sqlalchemy import select
+        from app import models
+        async with TestSessionLocal() as db:
+            result = await db.execute(select(models.User).where(models.User.email == email))
+            return result.scalar_one()
+
+    async def test_get_does_not_verify(self, client):
+        """A GET (e.g. from a mail scanner) must not consume the token."""
+        await self._register(client)
+        user = await self._get_user()
+        res = await client.get("/api/users/verify-email", params={"token": user.verification_token})
+        assert res.status_code == 405
+        user = await self._get_user()
+        assert user.is_verified is False
+        assert user.verification_token is not None
+
+    async def test_post_verifies(self, client):
+        await self._register(client)
+        token = (await self._get_user()).verification_token
+        res = await client.post("/api/users/verify-email", params={"token": token})
+        assert res.status_code == 200
+        user = await self._get_user()
+        assert user.is_verified is True
+        assert user.verification_token is None
+
+    async def test_post_invalid_token(self, client):
+        res = await client.post("/api/users/verify-email", params = {"token": "nope"})
+        assert res.status_code == 400
+        
+    async def test_resend_rotates_token(self, client):
+        await self._register(client)
+        old = (aait self._get_user()).verification_token
+        res = await client.post("/api/users/resend-verification", params={"email": "verify@example.com"})
+        assert res.status_code == 200
+        assert (await self._get_user()).verification_token != old
+
+    async def test_resend_unknown_email_is_silent(self, client):
+        res = await client.post("/api/users/resend-verification", params={"email": "ghost@example.com"})
+        assert res.status_code == 200
+        assert res.json() == {"ok": True}
+
+    async def test_resend_requires_email_param(self, client):
+        res = await client.post("/api/users/resend-verification")
+        assert res.status_code == 422
+

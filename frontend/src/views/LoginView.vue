@@ -64,6 +64,21 @@ const resendMsg = ref('')
 const cooldown = ref(0)
 let cooldownTimer = null
 
+// Fast API returns `detail` as a string for HTTPException but as a list of
+// objects for request validation errors (422); turn either into readable text.
+function formatDetail(detail, fallback) {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail) && detail.length) {
+    return detail
+      .map(d => {
+        const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : null
+	return field && field !== 'body' ? `${field}: ${d.msg}` : d.msg
+      })
+      .join('. ')
+  }
+  return fallback
+}
+
 function resetVerificationState() {
   awaitingVerification.value = false
   justRegistered.value = false
@@ -106,7 +121,7 @@ async function resend() {
       resendMsg.value = 'Too many requests. Wait a minute and try again.'
       startCooldown(60)
     } else {
-      resendMsg.vallue = 'Could not resend. Please try again.'
+      resendMsg.value = 'Could not resend. Please try again.'
     }
   } catch {
     resendMsg.value = 'Could not resend. Please try again.'
@@ -118,6 +133,14 @@ async function resend() {
 async function submit() {
   error.value = ''
   resetVerificationState()
+
+  if (!email.value || !password.value || (isRegistering.value && !username.value)) {
+    error.value = isRegistering.value
+      ? 'Email, username, and password are required.'
+      : 'Enter your email and password.'
+    return
+  }
+
   loading.value = true
 
   try {
@@ -129,7 +152,7 @@ async function submit() {
       })
       if (!res.ok) {
         const data = await res.json()
-        error.value = data.detail || 'Registration failed'
+	error.value = formatDetail(data.detail, 'Registration failed')
         return
       }
       // New accounts must verify their email before they can log in.
@@ -154,8 +177,8 @@ async function submit() {
 
     if (!res.ok) {
       const data = await res.json()
-      error.value = data.detail || 'Incorrect email or password'
-      if (res.status === 403 && /not verified/i.test(data.detail || '')) {
+      error.value = formatDetail(data.detail, 'Incorrect email or password')
+      if (res.status === 403 && /not verified/i.test(typeof data.detail === 'string' ? data.detail: '')) {
         awaitingVerification.value = true
       }
       return
