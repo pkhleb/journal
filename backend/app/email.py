@@ -1,3 +1,4 @@
+import html
 import resend
 import os
 from datetime import datetime, timezone, timedelta
@@ -34,14 +35,16 @@ async def send_verification_email(email: str, username: str, token: str):
         token: Verification token embedded in the link.
     """
     verification_url = f"{FRONTEND_URL}/verify-email?token={token}"
+    safe_username = html.escape(username)
+    safe_url = html.escape(verification_url)
     resend.Emails.send({
         "from": "noreply@pkhleb.com",
         "to": email,
         "subject": "Verify your journal account",
         "html": f"""
-            <p>Hi {username},</p>
+            <p>Hi {safe_username},</p>
             <p>Click the link below to verify your email address:</p>
-            <p><a href="{verification_url}">{verification_url}</a></p>
+            <p><a href="{safe_url}">{safe_url}</a></p>
             <p>This link expires in 24 hours.</p>
             <p>If you didn't create an account, you can ignore this email.</p>
         """
