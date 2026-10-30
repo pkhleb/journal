@@ -20,11 +20,21 @@
 
       <p v-if="error" class="error">{{ error }}</p>
 
+      <div v-if="awaitingVerification" class="notice">
+	<p v-if="justRegistered">
+	  Account created. We sent a verification link to {{ email }}. Click it, then sign in.
+	</p>
+	<button class="toggle-btn" @click="resend" :disabled="resending || cooldown > 0">
+	  {{ resending ? 'sending...' : cooldown > 0 ? `resend in ${cooldown}s` : 'resend verification email' }}
+	</button>
+	<p v-if="resendMsg" class="notice-msg">{{ resendMsg }}</p>
+      </div>
+
       <div class="actions">
         <button class="submit-btn" @click="submit" :disabled="loading">
           {{ loading ? 'please wait...' : isRegistering ? 'create account' : 'sign in' }}
         </button>
-        <button class="toggle-btn" @click="isRegistering = !isRegistering">
+        <button class="toggle-btn" @click="toggleMode">
           {{ isRegistering ? 'already have an account?' : 'create an account' }}
         </button>
       </div>
@@ -33,7 +43,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
@@ -47,8 +57,67 @@ const error = ref('')
 const loading = ref(false)
 const isRegistering = ref(false)
 
+const awaitingVerification = ref(false)
+const justRegistered = ref(false)
+const resending = ref(false)
+const resendMsg = ref('')
+const cooldown = ref(0)
+let cooldownTimer = null
+
+function resetVerificationState() {
+  awaitingVerification.value = false
+  justRegistered.value = false
+  resendMsg.value = ''
+}
+
+function toggleMode() {
+  isRegistering.value = !isRegistering.value
+  error.value = ''
+  resetVerificationState()
+}
+
+function startCooldown(seconds = 30) {
+  cooldown.value = seconds
+  clearInterval(cooldownTimer)
+  cooldownTimer = setInterval(() => {
+    cooldown.value -= 1
+    if (cooldown.value <= 0) clearInterval(cooldownTimer)
+  }, 1000)
+}
+
+onUnmounted(() => clearInterval(cooldownTimer))
+
+async function resend() {
+  if (!email.value) {
+    resendMsg.value = 'Enter your email above first.'
+    return
+  }
+  resending.value = true
+  resendMsg.value = ''
+  try {
+    const res = await fetch(
+      `/api/users/resend-verification?email=${encodeURIComponent(email.value)}`,
+      { method: 'POST' }
+    )
+    if (res.ok) {
+      resendMsg.value = 'If that account is awaiting verification, a new link is on its way.'
+      startCooldown()
+    } else if (res.status === 429) {
+      resendMsg.value = 'Too many requests. Wait a minute and try again.'
+      startCooldown(60)
+    } else {
+      resendMsg.vallue = 'Could not resend. Please try again.'
+    }
+  } catch {
+    resendMsg.value = 'Could not resend. Please try again.'
+  } finally {
+    resending.value = false
+  }
+}
+
 async function submit() {
   error.value = ''
+  resetVerificationState()
   loading.value = true
 
   try {
@@ -63,6 +132,13 @@ async function submit() {
         error.value = data.detail || 'Registration failed'
         return
       }
+      // New accounts must verify their email before they can log in.
+      awaitingVerification.value = true
+      justRegistered.value = true
+      isRegistering.value = false
+      password.value = ''
+      startCooldown()
+      return
     }
 
     // Login
@@ -77,8 +153,11 @@ async function submit() {
     })
 
     if (!res.ok) {
-		  const data = await res.json()
+      const data = await res.json()
       error.value = data.detail || 'Incorrect email or password'
+      if (res.status === 403 && /not verified/i.test(data.detail || '')) {
+        awaitingVerification.value = true
+      }
       return
     }
 
@@ -152,6 +231,18 @@ input::placeholder { color: var(--color-text-muted); }
   color: #e24b4a;
   margin-bottom: 1rem;
 }
+.notice {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  margin-bottom: 1rem;
+  font-family: 'Lora', serif; font-size: 14px; line-height: 1.6;
+  color: var(--color-text-secondary);
+}
+.notice p { margin: 0; }
+.notice-msg {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--color-text-muted);
+}
+.toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .actions { display: flex; flex-direction: column; gap: 8px; margin-top: 1.5rem; }
 .submit-btn {
   height: 44px;

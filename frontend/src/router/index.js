@@ -6,6 +6,7 @@ import PredictorView from '../views/PredictorView.vue'
 import ActivityView from '../views/ActivityView.vue'
 import { useAuthStore } from '../stores/auth'
 import LoginView from '../views/LoginView.vue'
+import VerifyEmailView from '../views/VerifyEmailView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -15,7 +16,8 @@ const router = createRouter({
 		{ path: '/analytics', component: AnalyticsView, meta: {requiresAuth: true} },
 		{ path: '/predictor', component: PredictorView, meta: {requiresAuth: true} },
 		{ path: '/activity', component: ActivityView, meta: {requiresAuth: true} },
-		{ path: '/login', component: LoginView }
+		{ path: '/login', component: LoginView },
+	  	{ path: '/verify-email', component: VerifyEmailView }
 	],
 })
 
