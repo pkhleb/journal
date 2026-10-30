@@ -27,7 +27,7 @@ services:
       POSTGRES_PASSWORD: testpassword
       POSTGRES_DB: journal_test
     ports:
-      - "127.0.0.1:5434:5432"
+      - "127.0.0.1:5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U journal_test"]
       interval: 5s
@@ -53,6 +53,25 @@ services:
       - ./backend:/app
     ports:
       - "127.0.0.1:8000:8000"
+
+  # Experiments run against their own scratch database (journal_exp), never the app's.
+  #   docker compose run --rm experiments setup             # load backend/export.json
+  #   docker compose run --rm experiments signals_validate  # run experiments.<name>
+  # Not started by `docker compose up` (profile "tools").
+  experiments:
+    image: journal-backend:dev
+    profiles: ["tools"]
+    working_dir: /app
+    entrypoint: ["sh", "./experiments.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://journal:${POSTGRES_PASSWORD:-devpassword}@db:5432/journal_exp
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key}
+      EXPERIMENTS_EMAIL: test@local.dev
+    volumes:
+      - ./backend:/app
 
   # Vite dev server instead of the production nginx image.
   frontend:

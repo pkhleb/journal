@@ -186,6 +186,16 @@ docker compose up
 docker compose exec backend pytest tests/ -v
 ```
 
+**Run the experiments** against a scratch database (`journal_exp`, separate from the app's), loaded from a JSON export of your account:
+
+```bash
+cp ~/Downloads/export.json backend/export.json            # git-ignored
+docker compose run --rm experiments setup                 # (re)creates journal_exp and loads the export
+docker compose run --rm experiments signals_validate      # any module in backend/experiments/
+```
+
+Re-run `setup` to refresh from a newer export. The scripts run as `test@local.dev`, the user `import.py` creates.
+
 **Reset the dev database:** `docker compose down -v`, then `docker compose up`.
 
 **Production** uses only `docker-compose.yml`; the deploy workflow passes `-f docker-compose.yml` so the override is never merged. Do the same if you run compose by hand on the server.
