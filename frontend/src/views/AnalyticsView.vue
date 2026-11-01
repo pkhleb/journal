@@ -63,7 +63,7 @@ function buildChart() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: ctx => `${ctx.parsed.y} kg`
+            label: ctx => `${ctx.parsed.y} lb`
           }
         }
       },
