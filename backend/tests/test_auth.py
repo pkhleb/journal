@@ -62,6 +62,19 @@ class TestLogin:
         })
         assert res.status_code == 403
 
+    async def test_login_unverified_wrong_password_is_generic(self, client):
+        await client.post("/api/users/register", json={
+            "email": "unverified2@example.com",
+            "username": "unverified2",
+            "password": "password123"
+        })
+        res = await client.post("/api/users/login", data={
+            "username": "unverified2@example.com",
+            "password": "wrongpassword"
+        })
+        assert res.status_code == 401
+        assert res.json()["detail"] == "Incorrect email or password"
+
     async def test_login_verified(self, auth_client):
         res = await auth_client.get("/api/users/me")
         assert res.status_code == 200
@@ -109,7 +122,8 @@ class TestLogin:
             "username": "lockout@example.com",
             "password": "wrongpassword"
         })
-        assert res.status_code == 403
+        assert res.status_code == 401
+        assert res.json()["detail"] == "Incorrect email or password"
 
 class TestProtectedRoutes:
     async def test_no_token_rejected(self, client):
