@@ -76,14 +76,15 @@ let usersInstance = null
 
 async function fetchActivity() {
   loading.value = true
-  const res = await apiFetch(`/activity?period=${period.value}`)
-  if (res.status === 403) {
-    forbidden.value = true
+  try {
+    const res = await apiFetch(`/activity?period=${period.value}`)
+    buckets.value = await res.json()
+  } catch (e) {
+    if (e.status === 403) forbidden.value = true
+    else console.error('Failed to fetch activity', e)
+  } finally {
     loading.value = false
-    return
   }
-  buckets.value = await res.json()
-  loading.value = false
 }
 
 const stats = computed(() => {

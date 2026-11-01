@@ -135,10 +135,15 @@ let weightInstance = null
 
 async function fetchMetrics() {
   loading.value = true
-  const res = await apiFetch('/predictor/metrics')
-  events.value = await res.json()
-  selectedVersion.value = latestVersion.value
-  loading.value = false
+  try {
+    const res = await apiFetch('/predictor/metrics')
+    events.value = await res.json()
+    selectedVersion.value = latestVersion.value
+  } catch (e) {
+    console.error('Failed to fetch predictor metrics', e)
+  } finally {
+    loading.value = false
+  }
 }
 
 // Resolved, non-stale events carry a trustworthy hit/rank verdict — a stale
