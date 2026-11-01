@@ -55,9 +55,12 @@ export const useJournalStore = defineStore('journal', () => {
 
   async function fetchEntries() {
     loading.value = true
-    const res = await apiFetch(`/entries`)
-    entries.value = await res.json()
-    loading.value = false
+    try {
+      const res = await apiFetch(`/entries`)
+      entries.value = await res.json()
+    } finally {
+      loading.value = false
+    }
   }
 
   async function submitEntry(prose, metricType, metricData) {

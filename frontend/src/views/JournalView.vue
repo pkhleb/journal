@@ -163,7 +163,13 @@ async function saveEdit() {
 }
 
 async function exportDb() {
-	const res = await apiFetch('/export/db')
+	let res
+	try {
+		res = await apiFetch('/export/db')
+	} catch (e) {
+		console.error('Export failed', e)
+		return
+	}
 	const blob = await res.blob()
 	const url = URL.createObjectURL(blob)
 	const a = document.createElement('a')

@@ -99,9 +99,14 @@ const { rows: mealRows, addRow: addMealRow, removeRow: removeMealRow,
 async function fetchRanked() {
   const lastName = fieldValues.value['name'] || lastSubmittedExercise.value || null
 	const query = lastName ? `?last_exercise=${encodeURIComponent(lastName)}` : ''
-	const res = await apiFetch(`/exercises/ranked${query}`)
-	const data = await res.json()
-	rankedExercises.value = data
+	try {
+		const res = await apiFetch(`/exercises/ranked${query}`)
+		const data = await res.json()
+		rankedExercises.value = Array.isArray(data) ? data : []
+	} catch (e) {
+		console.error('Failed to fetch ranked exercises', e)
+		rankedExercises.value = []
+	}
 }
 
 watch(selectedType, (val) => {
