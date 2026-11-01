@@ -11,6 +11,12 @@ from app.predictor import service as predictor
 router = APIRouter(prefix="/api")
 
 
+def _exercise_name(metric_type: str | None, metric_data: dict | None) -> str | None:
+    if metric_type != "exercise":
+        return None
+    return (metric_data or {}).get("name") or None
+
+
 @router.get("/entries", response_model=list[schemas.EntryOut])
 async def get_entries(
     db: AsyncSession = Depends(get_db),
@@ -66,7 +72,7 @@ async def create_entry(
     if entry.metric_type == "exercise":
         name = (entry.metric_data or {}).get("name")
         if name:
-            await predictor.resolve(db, current_user.id, chosen_exercise=name)
+            await predictor.resolve(db, current_user.id, chosen_exercise=name, entry_id=db_entry.id)
     return db_entry
 
 
@@ -100,10 +106,17 @@ async def update_entry(
     db_entry = result.scalar_one_or_none()
     if not db_entry:
         raise HTTPException(404, "Entry not found")
+    old_name = _exercise_name(db_entry.metric_type, db_entry.metric_data)
+    new_name = _exercise_name(entry.metric_type, entry.metric_data)
     db_entry.prose = entry.prose
     db_entry.metric_type = entry.metric_type
     db_entry.metric_data = entry.metric_data
+    if old_name and old_name != new_name:
+        # Renamed (or no longer an exercise): re-score the prediction that
+        # was graded against the old name.
+        await predictor.rescore(db, current_user.id, entry_id, new_name)
     await db.commit()
+    predictor.invalidate(current_user.id)
     return {"ok": True}
 
 
@@ -136,7 +149,9 @@ async def delete_entry(
     if not db_entry:
         raise HTTPException(404, "Entry not found")
     await db.delete(db_entry)
+    await predictor.rescore(db, current_user.id, entry_id)
     await db.commit()
+    predictor.invalidate(current_user.id)
     return {"ok": True}
 
 
