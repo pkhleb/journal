@@ -2,6 +2,8 @@ networks:
   default:
     ipam:
       config:
+        # fowarded-allow-ips in entrypoint.sh trusts this range.
+        # keep them in sync
         - subnet: 172.18.0.0/16
 services:
   db:
