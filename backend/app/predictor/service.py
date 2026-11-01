@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
 from zoneinfo import ZoneInfo
@@ -24,6 +25,24 @@ SIGNATURE_KEY = "_feature_signature"
 # runs multi-process/horizontally scaled.
 _aggregate_cache: dict[int, dict] = {}
 
+# Bumped by invalidate(). A recompute remembers the generation it started
+# under and only caches its result if no invalidation happened meanwhile —
+# otherwise a slow recompute finishing after invalidate() would re-cache
+# stale data.
+_cache_generation: dict[int, int] = {}
+
+# Per-user locks serializing the "find open event, else insert" step in
+# predict(), so concurrent keystroke requests can't each insert an open event.
+# Same single-process assumption as the cache above.
+_event_locks: dict[int, asyncio.Lock] = {}
+
+
+def _event_lock(user_id: int) -> asyncio.Lock:
+    lock = _event_locks.get(user_id)
+    if lock is None:
+        lock = _event_locks[user_id] = asyncio.Lock()
+    return lock
+
 
 async def _get_aggregates(db: AsyncSession, user_id: int, now: datetime):
     today = now.astimezone(LOCAL_TZ).date()
@@ -31,14 +50,17 @@ async def _get_aggregates(db: AsyncSession, user_id: int, now: datetime):
     if cached and cached["day"] == today:
         return cached["aggregates"]
 
+    generation = _cache_generation.get(user_id, 0)
     aggregates = await get_session_aggregates(db, user_id, now)
-    _aggregate_cache[user_id] = {"aggregates": aggregates, "day": today}
+    if _cache_generation.get(user_id, 0) == generation:
+        _aggregate_cache[user_id] = {"aggregates": aggregates, "day": today}
     return aggregates
 
 
 def invalidate(user_id: int):
     """Drop the user's cached aggregates. Call whenever their entry history
     changes (create, edit, delete)."""
+    _cache_generation[user_id] = _cache_generation.get(user_id, 0) + 1
     _aggregate_cache.pop(user_id, None)
 
 
@@ -76,42 +98,44 @@ async def predict(
     ranked_names = weight_candidates(candidates, weights)
     latency_ms = (perf_counter() - started) * 1000
 
-    result = await db.execute(
-        select(models.PredictionEvent)
-        .where(
-            models.PredictionEvent.user_id == user_id,
-            models.PredictionEvent.resolved == False,  # noqa: E712
+    async with _event_lock(user_id):
+        result = await db.execute(
+            select(models.PredictionEvent)
+            .where(
+                models.PredictionEvent.user_id == user_id,
+                models.PredictionEvent.resolved == False,  # noqa: E712
+            )
+            .order_by(models.PredictionEvent.created_at.desc())
+            .limit(1)
         )
-        .order_by(models.PredictionEvent.created_at.desc())
-        .limit(1)
-    )
-    event = result.scalar_one_or_none()
-    event_data = {
-        "event_type": "next_exercise_prediction",
-        "last_exercise": last_exercise,
-        "candidates": candidates,
-        "ranked_exercises": ranked_names,
-        "weights_snapshot": weights,
-        "config_version": CONFIG_VERSION,
-        "prediction_created_at": now.isoformat(),
-    }
+        event = result.scalar_one_or_none()
+        event_data = {
+            "event_type": "next_exercise_prediction",
+            "last_exercise": last_exercise,
+            "candidates": candidates,
+            "ranked_exercises": ranked_names,
+            "weights_snapshot": weights,
+            "config_version": CONFIG_VERSION,
+            "prediction_created_at": now.isoformat(),
+        }
 
-    if event and (now - event.created_at) <= STALE_CUTOFF:
-        # Still-live prediction from moments ago (e.g. the previous
-        # keystroke) — refresh it in place instead of adding a new row.
-        event.data = event_data
-        event.created_at = now
-        event.latency_ms = latency_ms
-    else:
-        event = models.PredictionEvent(
-            user_id=user_id,
-            resolved=False,
-            data=event_data,
-            latency_ms=latency_ms,
-        )
-        db.add(event)
+        if event and (now - event.created_at) <= STALE_CUTOFF:
+            # Still-live prediction from moments ago (e.g. the previous
+            # keystroke) — refresh it in place instead of adding a new row.
+            event.data = event_data
+            event.created_at = now
+            event.latency_ms = latency_ms
+        else:
+            event = models.PredictionEvent(
+                user_id=user_id,
+                resolved=False,
+                data=event_data,
+                latency_ms=latency_ms,
+            )
+            db.add(event)
 
-    await db.commit()
+        await db.commit()
+
     return ranked_names
 
 
@@ -124,60 +148,61 @@ async def resolve(
     rescore() can find it if the entry is later deleted or renamed."""
     invalidate(user_id)
 
-    result = await db.execute(
-        select(models.PredictionEvent)
-        .where(
-            models.PredictionEvent.user_id == user_id,
-            models.PredictionEvent.resolved == False,  # noqa: E712
+    async with _event_lock(user_id):
+        result = await db.execute(
+            select(models.PredictionEvent)
+            .where(
+                models.PredictionEvent.user_id == user_id,
+                models.PredictionEvent.resolved == False,  # noqa: E712
+            )
+            .order_by(models.PredictionEvent.created_at.desc())
+            .limit(1)
         )
-        .order_by(models.PredictionEvent.created_at.desc())
-        .limit(1)
-    )
-    event = result.scalar_one_or_none()
-    if event is None:
-        return
+        event = result.scalar_one_or_none()
+        if event is None:
+            return
 
-    now = datetime.now(timezone.utc)
-    if now - event.created_at > STALE_CUTOFF:
+        now = datetime.now(timezone.utc)
+        if now - event.created_at > STALE_CUTOFF:
+            event.resolved = True
+            event.resolved_at = now
+            event.data = {**event.data, "chosen_exercise": chosen_exercise, "entry_id": entry_id, "stale": True}
+            await db.commit()
+            return
+
+        candidates = event.data["candidates"]
+        weights_before = event.data["weights_snapshot"]
+
+        weights_row_result = await db.execute(
+            select(models.ModelWeights).where(models.ModelWeights.user_id == user_id)
+        )
+        weights_row = weights_row_result.scalar_one_or_none()
+
+        new_weights, info = apply_miss_only_update(
+            candidates, chosen_exercise, weights_before, prior_weights=DEFAULT_WEIGHTS
+        )
+
+        if info["updated"]:
+            stored = {**new_weights, SIGNATURE_KEY: FEATURE_SIGNATURE}
+            if weights_row:
+                weights_row.weights = stored
+            else:
+                db.add(models.ModelWeights(user_id=user_id, weights=stored))
+
         event.resolved = True
         event.resolved_at = now
-        event.data = {**event.data, "chosen_exercise": chosen_exercise, "entry_id": entry_id, "stale": True}
+        event.data = {
+            **event.data,
+            "chosen_exercise": chosen_exercise,
+            "entry_id": entry_id,
+            "rank": info["rank"],
+            "hit": info["hit"],
+            "updated": info["updated"],
+            "update_mode": "miss_only",
+            "weights_before": weights_before,
+            "weights_after": new_weights if info["updated"] else None,
+        }
         await db.commit()
-        return
-
-    candidates = event.data["candidates"]
-    weights_before = event.data["weights_snapshot"]
-
-    weights_row_result = await db.execute(
-        select(models.ModelWeights).where(models.ModelWeights.user_id == user_id)
-    )
-    weights_row = weights_row_result.scalar_one_or_none()
-
-    new_weights, info = apply_miss_only_update(
-        candidates, chosen_exercise, weights_before, prior_weights=DEFAULT_WEIGHTS
-    )
-
-    if info["updated"]:
-        stored = {**new_weights, SIGNATURE_KEY: FEATURE_SIGNATURE}
-        if weights_row:
-            weights_row.weights = stored
-        else:
-            db.add(models.ModelWeights(user_id=user_id, weights=stored))
-
-    event.resolved = True
-    event.resolved_at = now
-    event.data = {
-        **event.data,
-        "chosen_exercise": chosen_exercise,
-        "entry_id": entry_id,
-        "rank": info["rank"],
-        "hit": info["hit"],
-        "updated": info["updated"],
-        "update_mode": "miss_only",
-        "weights_before": weights_before,
-        "weights_after": new_weights if info["updated"] else None,
-    }
-    await db.commit()
 
 
 async def rescore(
