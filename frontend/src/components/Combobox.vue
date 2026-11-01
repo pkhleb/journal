@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 const props = defineProps({
   modelValue: String,
@@ -38,6 +38,13 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const inputVal = ref(props.modelValue || '')
+
+// Keep the displayed text in sync when the parent changes the value
+// (row removal shifting indices, form reset, loading saved data).
+watch(() => props.modelValue, (v) => {
+  if ((v || '') !== inputVal.value) inputVal.value = v || ''
+})
+
 const isOpen = ref(false)
 const activeIdx = ref(-1)
 
