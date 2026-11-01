@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from typing import Optional
 from datetime import date, datetime
 
@@ -23,6 +23,20 @@ class EntryCreate(BaseModel):
         prose: Optional[str] = None
         metric_type: Optional[str] = None
         metric_data: Optional[dict] = None
+
+        @model_validator(mode="after")
+        def _check_metric(self):
+                if self.metric_type is not None and not self.metric_type.strip():
+                        raise ValueError("metric_type must not be empty")
+                if self.metric_type is not None and self.metric_data is None:
+                        raise ValueError("metric_data is required when metric_type is set")
+                if self.metric_type is None and self.metric_data is not None:
+                        raise ValueError("metric_type is required when metric_data is set")
+                if self.metric_type == "exercise":
+                        name = self.metric_data.get("name")
+                        if not isinstance(name, str) or not name.strip():
+                                raise ValueError("exercise metric_data requires a non-empty name")
+                return self
 
 class EntryOut(BaseModel):
         id: int
