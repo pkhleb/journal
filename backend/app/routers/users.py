@@ -11,7 +11,13 @@ from app.email import generate_verification_token, verification_token_expiry, se
 
 router = APIRouter(prefix="/api/users")
 
-INVALID_CREDENTIALS = HTTPException(status_code=401, detail="Incorrect email or password")
+
+def _invalid_credentials() -> HTTPException:
+    # Build a fresh exception per raise; a shared instance accumulates
+    # __traceback__ entries on every raise, leaking memory.
+    return HTTPException(status_code=401, detail="Incorrect email or password")
+
+
 DUMMY_HASH = auth.hash_password("dummy-password-for-timing")
 
 
@@ -85,7 +91,7 @@ async def login(
     locked = bool(user and user.locked_until and user.locked_until > datetime.now(timezone.utc))
 
     if not user or locked:
-        raise INVALID_CREDENTIALS
+        raise _invalid_credentials()
 
     if not password_ok:
         user.failed_login_attempts += 1
@@ -93,7 +99,7 @@ async def login(
             user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
             user.failed_login_attempts = 0
         await db.commit()
-        raise INVALID_CREDENTIALS
+        raise _invalid_credentials()
 
     # Only someone holding the correct password learns the account is unverified.
     if not user.is_verified:
