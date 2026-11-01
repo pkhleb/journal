@@ -92,11 +92,14 @@ async def update_entry(
         current_user: Authenticated user record.
 
     Raises:
-        HTTPException: If the entry is not found.
+        HTTPException: If the payload does not include prose or a metric,
+            or the entry is not found.
 
     Returns:
         dict: A confirmation payload with ok=True.
     """
+    if not entry.prose and not entry.metric_type:
+        raise HTTPException(400, "Entry must have prose or a metric")
     result = await db.execute(
         select(models.Entry).where(
             models.Entry.id == entry_id,
