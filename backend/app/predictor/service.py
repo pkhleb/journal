@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from time import perf_counter
 from zoneinfo import ZoneInfo
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, and_, or_
 
 from app import models
 from app.predictor.features import get_session_aggregates, build_candidates
@@ -36,7 +36,9 @@ async def _get_aggregates(db: AsyncSession, user_id: int, now: datetime):
     return aggregates
 
 
-def _invalidate_cache(user_id: int):
+def invalidate(user_id: int):
+    """Drop the user's cached aggregates. Call whenever their entry history
+    changes (create, edit, delete)."""
     _aggregate_cache.pop(user_id, None)
 
 
@@ -113,11 +115,14 @@ async def predict(
     return ranked_names
 
 
-async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
+async def resolve(
+    db: AsyncSession, user_id: int, chosen_exercise: str, entry_id: int | None = None,
+) -> None:
     """Called after a set is actually logged. Always invalidates the cache
     first — a new entry changes transition/weekday/recency history for this
-    user regardless of what happens below."""
-    _invalidate_cache(user_id)
+    user regardless of what happens below. entry_id is stored on the event so
+    rescore() can find it if the entry is later deleted or renamed."""
+    invalidate(user_id)
 
     result = await db.execute(
         select(models.PredictionEvent)
@@ -136,7 +141,7 @@ async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
     if now - event.created_at > STALE_CUTOFF:
         event.resolved = True
         event.resolved_at = now
-        event.data = {**event.data, "chosen_exercise": chosen_exercise, "stale": True}
+        event.data = {**event.data, "chosen_exercise": chosen_exercise, "entry_id": entry_id, "stale": True}
         await db.commit()
         return
 
@@ -164,6 +169,7 @@ async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
     event.data = {
         **event.data,
         "chosen_exercise": chosen_exercise,
+        "entry_id": entry_id,
         "rank": info["rank"],
         "hit": info["hit"],
         "updated": info["updated"],
@@ -172,3 +178,87 @@ async def resolve(db: AsyncSession, user_id: int, chosen_exercise: str) -> None:
         "weights_after": new_weights if info["updated"] else None,
     }
     await db.commit()
+
+
+async def rescore(
+    db: AsyncSession, user_id: int, entry_id: int, new_exercise: str | None = None,
+) -> None:
+    """Undo or redo what an entry taught the model after it was deleted
+    (new_exercise=None) or renamed (new_exercise=the new name). Finds the
+    prediction event scored against the entry; a deleted entry's event is
+    dropped, a renamed one is re-scored against the new name. Then every later
+    resolved event is replayed in order from the weights in force before it, so
+    the learned weights and the replayed events' rank/hit/weights_before/after
+    match the corrected history. Replay reuses each event's stored candidate
+    snapshot (features as they were at prediction time).
+
+    Does not commit — the caller commits together with the entry change. Events
+    resolved before entry_id was recorded can't be matched and are left as is."""
+    result = await db.execute(
+        select(models.PredictionEvent).where(
+            models.PredictionEvent.user_id == user_id,
+            models.PredictionEvent.resolved == True,  # noqa: E712
+            models.PredictionEvent.data["entry_id"].astext == str(entry_id),
+        )
+    )
+    target = result.scalars().first()
+    if target is None:
+        return
+
+    if new_exercise is None:
+        await db.delete(target)
+    else:
+        target.data = {**target.data, "chosen_exercise": new_exercise}
+
+    base = target.data.get("weights_before")
+    if base is None:
+        # Stale event: it never touched the weights, nothing to replay.
+        return
+
+    later_result = await db.execute(
+        select(models.PredictionEvent)
+        .where(
+            models.PredictionEvent.user_id == user_id,
+            models.PredictionEvent.resolved == True,  # noqa: E712
+            or_(
+                models.PredictionEvent.resolved_at > target.resolved_at,
+                and_(
+                    models.PredictionEvent.resolved_at == target.resolved_at,
+                    models.PredictionEvent.id > target.id,
+                ),
+            ),
+        )
+        .order_by(models.PredictionEvent.resolved_at, models.PredictionEvent.id)
+    )
+    replay = list(later_result.scalars())
+    if new_exercise is not None:
+        replay.insert(0, target)
+
+    weights = base
+    for event in replay:
+        data = event.data
+        if data.get("stale") or "candidates" not in data:
+            continue
+        new_weights, info = apply_miss_only_update(
+            data["candidates"], data["chosen_exercise"], weights, prior_weights=DEFAULT_WEIGHTS
+        )
+        event.data = {
+            **data,
+            "rank": info["rank"],
+            "hit": info["hit"],
+            "updated": info["updated"],
+            "weights_before": weights,
+            "weights_after": new_weights if info["updated"] else None,
+        }
+        if info["updated"]:
+            weights = new_weights
+
+    row_result = await db.execute(
+        select(models.ModelWeights).where(models.ModelWeights.user_id == user_id)
+    )
+    row = row_result.scalar_one_or_none()
+    stored = {**weights, SIGNATURE_KEY: FEATURE_SIGNATURE}
+    if row:
+        row.weights = stored
+    elif weights != dict(DEFAULT_WEIGHTS):
+        db.add(models.ModelWeights(user_id=user_id, weights=stored))
