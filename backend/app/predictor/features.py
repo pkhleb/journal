@@ -35,7 +35,7 @@ async def get_session_aggregates(
     for e in entries:
         local_dt = e.created_at.astimezone(LOCAL_TZ)
         day = local_dt.date()
-        name = e.metric_data.get("name")
+        name = (e.metric_data or {}).get("name")
         if not name:
             continue
         raw_sessions[day].append(name)
@@ -95,7 +95,7 @@ async def get_session_aggregates(
 
     last_seen = {}
     for e in entries:
-        name = e.metric_data.get("name")
+        name = (e.metric_data or {}).get("name")
         if name:
             last_seen[name] = e.created_at
 
