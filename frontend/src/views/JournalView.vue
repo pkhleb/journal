@@ -30,6 +30,7 @@
       <button class="submit-btn" @click="submit">Save entry</button>
       <button class="submit-btn" @click="exportDb">Export db</button>
       <span class="toast" :class="{ show: toastVisible }">saved</span>
+      <span v-if="errorMsg" class="error-msg" role="alert">{{ errorMsg }}</span>
     </div>
 
     <div v-if="store.entries.length" class="entries-section">
@@ -51,6 +52,7 @@
           <textarea v-model="editProse" placeholder="Write something…" />
         </div>
         <MetricFields ref="editMetricFields" />
+        <p v-if="errorMsg" class="error-msg" role="alert">{{ errorMsg }}</p>
         <div class="modal-actions">
           <button class="submit-btn" @click="saveEdit">Save</button>
           <button class="submit-btn" @click="cancelEdit">Cancel</button>
@@ -89,6 +91,12 @@ function logout() {
 const store = useJournalStore()
 const prose = ref('')
 const toastVisible = ref(false)
+const errorMsg = ref('')
+
+function describeError(e, action) {
+	if (e?.status === 422) return `Could not ${action}: some fields are missing or invalid.`
+	return `Could not ${action}. Please try again.`
+}
 const metricFields = ref(null)
 const editingEntry = ref(null)
 const editProse = ref('')
@@ -125,10 +133,18 @@ onMounted(() => store.fetchEntries())
 async function submit() {
   const { type, data } = metricFields.value.collect()
   if (!prose.value.trim() && !type) return
+  errorMsg.value = ''
 	if (type === 'exercise' && data?.name) {
     metricFields.value.lastSubmittedExercise = data.name
 	}
-  await store.submitEntry(prose.value.trim(), type, data)
+  try {
+    await store.submitEntry(prose.value.trim(), type, data)
+  } catch (e) {
+    if (e?.message === 'Unauthorized') return
+    console.error('Save failed', e)
+    errorMsg.value = describeError(e, 'save entry')
+    return
+  }
   prose.value = ''
   metricFields.value.reset()
 	exerciseFilter.value = ''
@@ -139,7 +155,14 @@ async function submit() {
 
 async function deleteEntry(id) {
   if (!confirm('Delete this entry?')) return
-  await store.deleteEntry(id)
+  errorMsg.value = ''
+  try {
+    await store.deleteEntry(id)
+  } catch (e) {
+    if (e?.message === 'Unauthorized') return
+    console.error('Delete failed', e)
+    errorMsg.value = describeError(e, 'delete entry')
+  }
 }
 
 async function startEdit(entry) {
@@ -152,13 +175,22 @@ async function startEdit(entry) {
 }
 
 function cancelEdit() {
+  errorMsg.value = ''
   editingEntry.value = null
   editProse.value = ''
 }
 
 async function saveEdit() {
   const { type, data } = editMetricFields.value.collect()
-  await store.updateEntry(editingEntry.value.id, editProse.value.trim(), type, data)
+  errorMsg.value = ''
+  try {
+    await store.updateEntry(editingEntry.value.id, editProse.value.trim(), type, data)
+  } catch (e) {
+    if (e?.message === 'Unauthorized') return
+    console.error('Update failed', e)
+    errorMsg.value = describeError(e, 'save changes')
+    return
+  }
   cancelEdit()
 }
 
@@ -241,6 +273,10 @@ textarea::placeholder { color: var(--color-text-muted); font-style: italic; }
   color: var(--color-success); opacity: 0; transition: opacity 0.2s;
 }
 .toast.show { opacity: 1; }
+.error-msg {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--color-error, #a32d2d);
+}
 .entries-section {
   margin-top: 2.5rem; border-top: 0.5px solid var(--color-border); padding-top: 1.5rem;
 }

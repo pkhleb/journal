@@ -48,6 +48,7 @@
     <div class="submit-row">
       <button class="submit-btn" @click="save">Save to inventory</button>
       <span class="toast" :class="{ show: toastVisible }">saved</span>
+      <span v-if="errorMsg" class="error-msg" role="alert">{{ errorMsg }}</span>
     </div>
 
     <div v-if="store.inventoryItems.length" class="entries-section">
@@ -95,6 +96,22 @@ const store = useJournalStore()
 
 const mealName = ref('')
 const toastVisible = ref(false)
+const errorMsg = ref('')
+
+async function guarded(action, fn) {
+  errorMsg.value = ''
+  try {
+    await fn()
+    return true
+  } catch (e) {
+    if (e?.message === 'Unauthorized') return false
+    console.error(`${action} failed`, e)
+    errorMsg.value = e?.status === 422
+      ? `Could not ${action}: some fields are missing or invalid.`
+      : `Could not ${action}. Please try again.`
+    return false
+  }
+}
 
 onMounted(() => {
   store.fetchInventory()
@@ -113,7 +130,7 @@ async function save() {
   if (!mealName.value.trim()) return
   const items = collectMeal()
   if (!items) return
-  await store.createInventoryItem(mealName.value.trim(), items)
+  if (!await guarded('save meal', () => store.createInventoryItem(mealName.value.trim(), items))) return
   mealName.value = ''
 	resetMeal()
   toastVisible.value = true
@@ -121,14 +138,14 @@ async function save() {
 }
 
 async function consume(id) {
-  await store.consumeInventoryItem(id)
+  if (!await guarded('consume meal', () => store.consumeInventoryItem(id))) return
   toastVisible.value = true
   setTimeout(() => toastVisible.value = false, 1800)
 }
 
 async function remove(id) {
   if (!confirm('Delete this prepped meal?')) return
-  await store.deleteInventoryItem(id)
+  await guarded('delete meal', () => store.deleteInventoryItem(id))
 }
 
 function totalCalories(item) {
@@ -232,6 +249,10 @@ input::placeholder { color: var(--color-text-muted); font-size: 13px; }
   color: var(--color-success); opacity: 0; transition: opacity 0.2s;
 }
 .toast.show { opacity: 1; }
+.error-msg {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--color-error, #a32d2d);
+}
 .entries-section {
   margin-top: 2.5rem; border-top: 0.5px solid var(--color-border); padding-top: 1.5rem;
 }
