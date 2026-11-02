@@ -5,6 +5,8 @@ from sqlalchemy import select
 from app.database import get_db
 from app import models, schemas, auth
 from app.limiter import limiter
+from app.predictor import service as predictor
+from app.timeutil import DEFAULT_TIMEZONE
 from fastapi import Request
 from datetime import datetime, timezone, timedelta
 from app.email import generate_verification_token, verification_token_expiry, send_verification_email
@@ -50,6 +52,7 @@ async def register(request: Request, user: schemas.UserCreate, db: AsyncSession 
         username=user.username,
         hashed_password=auth.hash_password(user.password),
         is_verified=False,
+        timezone=user.timezone or DEFAULT_TIMEZONE,
         verification_token=token,
         verification_token_expires=verification_token_expiry(),
     )
@@ -123,6 +126,24 @@ async def me(current_user: models.User = Depends(auth.get_current_user)):
     Returns:
         models.User: The current user record.
     """
+    return current_user
+
+
+@router.patch("/me", response_model=schemas.UserOut)
+async def update_me(
+    body: schemas.UserUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    """Change the authenticated user's IANA timezone.
+
+    Session and weekday groupings depend on it, so the cached predictor
+    aggregates are dropped when it changes.
+    """
+    if body.timezone != current_user.timezone:
+        current_user.timezone = body.timezone
+        await db.commit()
+        predictor.invalidate(current_user.id)
     return current_user
 
 

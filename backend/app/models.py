@@ -5,6 +5,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.sql import expression
 from sqlalchemy import DateTime
 from app.database import Base
+from app.timeutil import DEFAULT_TIMEZONE
 
 class User(Base):
         __tablename__ = "users"
@@ -22,6 +23,7 @@ class User(Base):
         is_admin              = Column(Boolean, default=False, server_default=expression.false(), nullable=False)
         verification_token    = Column(String, nullable=True)
         verification_token_expires = Column (DateTime(timezone=True), nullable=True)
+        timezone              = Column(String, nullable=False, default=DEFAULT_TIMEZONE, server_default=DEFAULT_TIMEZONE)
 
 class Entry(Base):
         __tablename__ = "entries"

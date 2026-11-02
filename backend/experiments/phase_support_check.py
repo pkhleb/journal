@@ -9,12 +9,11 @@ Usage:
 import asyncio
 import sys
 from collections import defaultdict
-from zoneinfo import ZoneInfo
 
 from app.predictor.features import PHASE_CUTOFF, MIN_PHASE_SUPPORT
 from experiments.run import load_entries
 
-LOCAL_TZ = ZoneInfo("America/New_York")
+from app.timeutil import DEFAULT_TZ as LOCAL_TZ
 
 
 async def main(email: str):

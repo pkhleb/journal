@@ -6,12 +6,12 @@ from sqlalchemy import select
 import math
 from app.models import Entry
 from app.predictor.config import PHASE_CUTOFF, MIN_PHASE_SUPPORT
+from app.timeutil import DEFAULT_TZ
 
-LOCAL_TZ = ZoneInfo("America/New_York")
 
 async def get_session_aggregates(
     db: AsyncSession, user_id: int, now: datetime | None = None,
-    phase_cutoff: int = PHASE_CUTOFF,
+    phase_cutoff: int = PHASE_CUTOFF, tz: ZoneInfo = DEFAULT_TZ,
 ) -> dict | None:
     """The expensive part: one query over the user's whole exercise history
     plus O(n) aggregation. Deliberately does NOT take last_exercise — that's
@@ -21,7 +21,10 @@ async def get_session_aggregates(
 
     phase_cutoff is threaded through as a parameter (default PHASE_CUTOFF)
     rather than hardcoded, so experiments/phase_sweep.py can try different
-    values without editing this file between runs."""
+    values without editing this file between runs.
+
+    tz is the user's zone: it decides which local day each set belongs to, so
+    it must be the same zone build_candidates is later given."""
     result = await db.execute(
         select(Entry)
         .where(Entry.user_id == user_id, Entry.metric_type == "exercise")
@@ -33,7 +36,7 @@ async def get_session_aggregates(
 
     raw_sessions: dict = defaultdict(list)
     for e in entries:
-        local_dt = e.created_at.astimezone(LOCAL_TZ)
+        local_dt = e.created_at.astimezone(tz)
         day = local_dt.date()
         name = (e.metric_data or {}).get("name")
         if not name:
@@ -100,7 +103,7 @@ async def get_session_aggregates(
             last_seen[name] = e.created_at
 
     now = now or datetime.now(timezone.utc)
-    today = now.astimezone(LOCAL_TZ).date()
+    today = now.astimezone(tz).date()
     today_session_length = len(raw_sessions.get(today, []))
     today_exercises_so_far = set(raw_sessions.get(today, []))
 
@@ -113,13 +116,14 @@ async def get_session_aggregates(
         "last_seen": last_seen,
         "today_session_length": today_session_length,
         "today_exercises_so_far": today_exercises_so_far,
+        "today_last_exercise": raw_sessions[today][-1] if raw_sessions.get(today) else None,
         "phase_cutoff": phase_cutoff,
     }
 
 
 def build_candidates(
     aggregates: dict | None, last_exercise: str | None = None, now: datetime | None = None,
-    min_phase_support: int = MIN_PHASE_SUPPORT,
+    min_phase_support: int = MIN_PHASE_SUPPORT, tz: ZoneInfo = DEFAULT_TZ,
 ) -> list[dict]:
     """The cheap part: pure in-memory math from already-computed aggregates.
     No DB access — safe to call on every keystroke. This is where
@@ -133,7 +137,7 @@ def build_candidates(
         return []
 
     now = now or datetime.now(timezone.utc)
-    today_wd = now.astimezone(LOCAL_TZ).weekday()
+    today_wd = now.astimezone(tz).weekday()
 
     transition_counts = aggregates["transition_counts"]
     phase_transition_counts = aggregates.get("phase_transition_counts", {"early": {}, "late": {}})
@@ -221,11 +225,11 @@ def build_candidates(
 
 async def get_exercise_candidates(
     db: AsyncSession, user_id: int, last_exercise: str | None = None,
-    now: datetime | None = None,
+    now: datetime | None = None, tz: ZoneInfo = DEFAULT_TZ,
 ) -> list[dict]:
     """One-shot convenience wrapper — still what check_rankings.py and the
     tests call directly. The cached path in predictor/service.py calls
     get_session_aggregates + build_candidates separately instead, so it can
     reuse aggregates across many calls with different last_exercise."""
-    aggregates = await get_session_aggregates(db, user_id, now)
-    return build_candidates(aggregates, last_exercise, now)
+    aggregates = await get_session_aggregates(db, user_id, now, tz=tz)
+    return build_candidates(aggregates, last_exercise, now, tz=tz)
