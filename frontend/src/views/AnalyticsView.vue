@@ -12,6 +12,7 @@
         <label class="field-label" for="analytics-start-date">start date</label>
         <input id="analytics-start-date" v-model="startDate" type="date" class="date-input" />
       </div>
+
       <div class="field-group">
         <label class="field-label" for="analytics-end-date">end date</label>
         <input id="analytics-end-date" v-model="endDate" type="date" class="date-input" />
@@ -20,23 +21,32 @@
 
     <div class="chart-section">
       <p class="section-title">weight over time</p>
+
       <div v-if="weightData.length === 0" class="empty-state">
         no weight entries yet
       </div>
+
       <canvas v-else ref="weightChart" height="300"></canvas>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { Chart, LineController, LineElement, PointElement, LinearScale, TimeScale, Tooltip } from 'chart.js'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import {
+  Chart,
+  LineController,
+  LineElement,
+  PointElement,
+  LinearScale,
+  TimeScale,
+  Tooltip
+} from 'chart.js'
 import 'chartjs-adapter-date-fns'
 import { useJournalStore } from '../stores/journal'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
-
 Chart.register(LineController, LineElement, PointElement, LinearScale, TimeScale, Tooltip)
 
 const store = useJournalStore()
@@ -65,8 +75,16 @@ const weightData = computed(() => {
 })
 
 function buildChart() {
-  if (!weightChart.value || weightData.value.length === 0) return
+  if (!weightChart.value || weightData.value.length === 0) {
+    if (chartInstance) {
+      chartInstance.destroy()
+      chartInstance = null
+    }
+    return
+  }
+
   if (chartInstance) chartInstance.destroy()
+
   chartInstance = new Chart(weightChart.value, {
     type: 'line',
     data: {
@@ -98,7 +116,11 @@ function buildChart() {
         },
         y: {
           grid: { color: 'rgba(0,0,0,0.06)' },
-          ticks: { color: '#888780', font: { family: 'DM Mono' }, callback: v => `${v} lb` }
+          ticks: {
+            color: '#888780',
+            font: { family: 'DM Mono' },
+            callback: v => `${v} lb`
+          }
         }
       }
     }
@@ -111,33 +133,62 @@ onMounted(async () => {
 })
 
 watch(weightData, buildChart)
+
+onBeforeUnmount(() => {
+  if (chartInstance) {
+    chartInstance.destroy()
+    chartInstance = null
+  }
+})
 </script>
 
 <style scoped>
-.journal-wrap { max-width: 640px; margin: 0 auto; }
+.journal-wrap {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
 .journal-header {
-  display: flex; align-items: baseline; gap: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
   margin-bottom: 2rem;
   border-bottom: 0.5px solid var(--color-border);
   padding-bottom: 1rem;
 }
+
 .journal-title {
-  font-family: 'Lora', serif; font-size: 22px;
-  font-weight: 400; font-style: italic;
+  font-family: 'Lora', serif;
+  font-size: 22px;
+  font-weight: 400;
+  font-style: italic;
 }
+
 .nav-link {
-  font-family: 'DM Mono', monospace; font-size: 11px;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--color-text-muted); margin-left: auto; text-decoration: none;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-left: auto;
+  text-decoration: none;
 }
-.nav-link:hover { color: var(--color-text-primary); }
+
+.nav-link:hover {
+  color: var(--color-text-primary);
+}
+
 .date-filter {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
-.field-group { margin: 0; }
+
+.field-group {
+  margin: 0;
+}
+
 .field-label {
   display: block;
   font-family: 'DM Mono', monospace;
@@ -147,6 +198,7 @@ watch(weightData, buildChart)
   color: var(--color-text-muted);
   margin-bottom: 8px;
 }
+
 .date-input {
   width: 100%;
   background: transparent;
@@ -157,17 +209,29 @@ watch(weightData, buildChart)
   font-size: 12px;
   padding: 0.7rem 0.8rem;
 }
-.chart-section { margin-bottom: 2rem; }
+
+.chart-section {
+  margin-bottom: 2rem;
+}
+
 .section-title {
-  font-family: 'DM Mono', monospace; font-size: 11px;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--color-text-muted); margin-bottom: 1rem;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 1rem;
 }
+
 .empty-state {
-  font-family: 'Lora', serif; font-style: italic;
-  font-size: 14px; color: var(--color-text-muted);
-  text-align: center; padding: 2rem 0;
+  font-family: 'Lora', serif;
+  font-style: italic;
+  font-size: 14px;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: 2rem 0;
 }
+
 @media (max-width: 520px) {
   .date-filter {
     grid-template-columns: 1fr;
