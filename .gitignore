@@ -57,3 +57,6 @@ __screenshots__/
 
 # OS
 .DS_Store
+
+# Production schema dump used for migration verification
+journal_schema.sql
