@@ -116,6 +116,7 @@ async def get_session_aggregates(
         "last_seen": last_seen,
         "today_session_length": today_session_length,
         "today_exercises_so_far": today_exercises_so_far,
+        "today_last_exercise": raw_sessions[today][-1] if raw_sessions.get(today) else None,
         "phase_cutoff": phase_cutoff,
     }
 

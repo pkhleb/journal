@@ -92,6 +92,10 @@ async def predict(
     started = perf_counter()
     now = now or datetime.now(timezone.utc)
     aggregates = await _get_aggregates(db, user_id, now, tz)
+    # The client loses its in-memory last exercise on reload; default to the
+    # latest exercise logged today so the transition signals still apply.
+    if last_exercise is None and aggregates:
+        last_exercise = aggregates.get("today_last_exercise")
     candidates = build_candidates(aggregates, last_exercise, now, tz=tz)
     if not candidates:
         return []

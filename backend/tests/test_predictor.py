@@ -90,6 +90,29 @@ class TestPredictorEndpointWiring:
         res = await auth_client.get("/api/exercises/ranked")
         assert res.status_code == 200
 
+class TestLastExerciseDefault:
+    async def test_defaults_to_latest_exercise_logged_today(self, auth_client):
+        user_id = await get_test_user_id()
+        predictor.invalidate(user_id)
+        async with TestSessionLocal() as db:
+            await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
+            await add_exercise_entry(db, user_id, "Bench", FROZEN_NOW - timedelta(hours=2))
+            await add_exercise_entry(db, user_id, "Row", FROZEN_NOW - timedelta(hours=1))
+            await predictor.predict(db, user_id, now=FROZEN_NOW)
+
+        events = await get_events(user_id)
+        assert events[0].data["last_exercise"] == "Row"
+
+    async def test_explicit_last_exercise_wins(self, auth_client):
+        user_id = await get_test_user_id()
+        predictor.invalidate(user_id)
+        async with TestSessionLocal() as db:
+            await add_exercise_entry(db, user_id, "Bench", FROZEN_NOW - timedelta(hours=2))
+            await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
+
+        events = await get_events(user_id)
+        assert events[0].data["last_exercise"] == "Squat"
+
 class TestPredictorMissOnlyUpdate:
     """Deterministic scenarios with frozen time and hand-placed history, so
     hit/miss outcomes don't depend on the real day tests happen to run."""
