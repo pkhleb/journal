@@ -351,4 +351,21 @@ class TestPredictorMetricsEndpoint:
         assert len(payload) == 1
         assert all(e["user_id"] == user_id for e in payload)
 
+    async def test_metrics_omits_candidates_but_keeps_other_fields(self, auth_client):
+        user_id = await get_test_user_id()
+        async with TestSessionLocal() as db:
+            await add_exercise_entry(db, user_id, "Squat", FROZEN_NOW - timedelta(days=1))
+            await predictor.predict(db, user_id, last_exercise="Squat", now=FROZEN_NOW)
+            await predictor.resolve(db, user_id, chosen_exercise="Squat")
 
+        # The stored row still has candidates (rescoring needs them)...
+        stored = (await get_events(user_id))[-1]
+        assert stored.data["candidates"]
+
+        # ...but the list response must not ship them.
+        res = await auth_client.get("/api/predictor/metrics")
+        assert res.status_code == 200
+        data = res.json()[0]["data"]
+        assert "candidates" not in data
+        for key in ("ranked_exercises", "weights_snapshot", "config_version", "hit", "rank"):
+            assert key in data
