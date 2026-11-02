@@ -47,8 +47,58 @@ jobs:
           DATABASE_URL: postgresql+asyncpg://journal_test:testpassword@localhost:5433/journal_test
         run: pytest tests/ -v
 
+  migrations:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: journal_test
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: journal_migrations
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    # Exercises the real Alembic chain on an empty database. The test job
+    # uses create_all, so without this a missing or broken migration ships.
+    env:
+      SECRET_KEY: testsecretkey
+      DATABASE_URL: postgresql+asyncpg://journal_test:testpassword@localhost:5434/journal_migrations
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt
+
+      - name: Upgrade to head
+        working-directory: backend
+        run: alembic upgrade head
+
+      - name: Check models match migrations
+        working-directory: backend
+        run: alembic check
+
+      - name: Downgrade to base and re-upgrade
+        working-directory: backend
+        run: |
+          alembic downgrade base
+          alembic upgrade head
+
   build-and-push:
-    needs: test
+    needs: [test, migrations]
     runs-on: ubuntu-latest
 
     steps:

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, Text, Boolean, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -21,7 +21,7 @@ class User(Base):
         locked_until          = Column(DateTime(timezone=True), nullable=True)
         is_verified           = Column(Boolean, default=False)
         is_admin              = Column(Boolean, default=False, server_default=expression.false(), nullable=False)
-        verification_token    = Column(String, nullable=True)
+        verification_token    = Column(Text, nullable=True)
         verification_token_expires = Column (DateTime(timezone=True), nullable=True)
         timezone              = Column(String, nullable=False, default=DEFAULT_TIMEZONE, server_default=DEFAULT_TIMEZONE)
 
@@ -36,11 +36,15 @@ class Entry(Base):
         created_at      = Column(DateTime(timezone=True), server_default=func.now())
         user            = relationship("User", back_populates="entries")
 
+        __table_args__ = (
+            Index("ix_entries_user_id_created_at", "user_id", "created_at"),
+        )
+
 class InventoryItem(Base):
         __tablename__ = "inventory"
 
         id              = Column(Integer, primary_key=True, index=True)
-        user_id         = Column(Integer, ForeignKey("users.id"), nullable=False)
+        user_id         = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
         name            = Column(String, nullable=False)
         items           = Column(JSONB, nullable=False)
         created_at      = Column(DateTime(timezone=True), server_default=func.now())
