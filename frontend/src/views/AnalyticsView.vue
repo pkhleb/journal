@@ -7,6 +7,17 @@
       <router-link v-if="authStore.user?.is_admin" to="/activity" class="nav-link">activity</router-link>
     </div>
 
+    <div class="date-filter">
+      <div class="field-group">
+        <label class="field-label" for="analytics-start-date">start date</label>
+        <input id="analytics-start-date" v-model="startDate" type="date" class="date-input" />
+      </div>
+      <div class="field-group">
+        <label class="field-label" for="analytics-end-date">end date</label>
+        <input id="analytics-end-date" v-model="endDate" type="date" class="date-input" />
+      </div>
+    </div>
+
     <div class="chart-section">
       <p class="section-title">weight over time</p>
       <div v-if="weightData.length === 0" class="empty-state">
@@ -30,17 +41,28 @@ Chart.register(LineController, LineElement, PointElement, LinearScale, TimeScale
 
 const store = useJournalStore()
 const weightChart = ref(null)
+const startDate = ref('')
+const endDate = ref('')
 let chartInstance = null
 
-const weightData = computed(() =>
-  store.entries
+const weightData = computed(() => {
+  const start = startDate.value ? new Date(`${startDate.value}T00:00:00`) : null
+  const end = endDate.value ? new Date(`${endDate.value}T23:59:59.999`) : null
+
+  return store.entries
     .filter(e => e.metric_type === 'weight' && e.metric_data?.value != null)
+    .filter(e => {
+      const date = new Date(e.created_at)
+      if (start && date < start) return false
+      if (end && date > end) return false
+      return true
+    })
     .map(e => ({
       x: new Date(e.created_at),
       y: e.metric_data.value
     }))
     .reverse()
-)
+})
 
 function buildChart() {
   if (!weightChart.value || weightData.value.length === 0) return
@@ -109,6 +131,32 @@ watch(weightData, buildChart)
   color: var(--color-text-muted); margin-left: auto; text-decoration: none;
 }
 .nav-link:hover { color: var(--color-text-primary); }
+.date-filter {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.field-group { margin: 0; }
+.field-label {
+  display: block;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+.date-input {
+  width: 100%;
+  background: transparent;
+  border: 0.5px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  padding: 0.7rem 0.8rem;
+}
 .chart-section { margin-bottom: 2rem; }
 .section-title {
   font-family: 'DM Mono', monospace; font-size: 11px;
@@ -119,5 +167,10 @@ watch(weightData, buildChart)
   font-family: 'Lora', serif; font-style: italic;
   font-size: 14px; color: var(--color-text-muted);
   text-align: center; padding: 2rem 0;
+}
+@media (max-width: 520px) {
+  .date-filter {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
