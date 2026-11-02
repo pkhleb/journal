@@ -8,6 +8,9 @@
 			<router-link v-if="authStore.user?.is_admin" to="/activity" class="nav-link">activity</router-link>
 			<button class="nav-link" @click="logout" style="background:none;border:none;cursor:pointer;">logout</button>
       <span class="journal-date">{{ todayStr }}</span>
+      <select class="tz-select" :value="authStore.timezone" @change="changeTimezone($event.target.value)" title="timezone (decides where your day starts)">
+        <option v-for="z in timeZones" :key="z" :value="z">{{ z }}</option>
+      </select>
     </div>
 
 		<div v-if="todaysSummary.calories > 0 || todaysSummary.protein > 0 || todaysSummary.caffeine > 0" class="daily-summary">
@@ -70,6 +73,7 @@ import EntryCard from '../components/EntryCard.vue'
 import { useAuthStore } from '../stores/auth'
 import { useRouter } from 'vue-router'
 import { apiFetch } from '../api.js'
+import { dayKey, formatToday, supportedTimeZones } from '../utils/timezone'
 
 const authStore = useAuthStore()
 const router = useRouter()
@@ -103,9 +107,10 @@ const editProse = ref('')
 const editMetricFields = ref(null)
 
 const todaysSummary = computed(() => {
-	const today = new Date().toDateString()
+	const tz = authStore.timezone
+	const today = dayKey(new Date(), tz)
 	const todaysEntries = store.entries.filter( e =>
-		new Date(e.created_at).toDateString() === today
+		dayKey(e.created_at, tz) === today
 	)
 	let calories = 0
 	let protein = 0
@@ -124,11 +129,31 @@ const todaysSummary = computed(() => {
 	return { calories: Math.round(calories), protein: Math.round(protein), caffeine: Math.round(caffeine) }
 })
 
-const todayStr = new Date().toLocaleDateString('en-US', {
-  weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+const todayStr = computed(() => formatToday(authStore.timezone))
+
+// Include the user's current zone even if the browser's list lacks it.
+const timeZones = computed(() => {
+  const all = supportedTimeZones()
+  return all.includes(authStore.timezone) ? all : [authStore.timezone, ...all]
 })
 
-onMounted(() => store.fetchEntries())
+async function changeTimezone(tz) {
+  try {
+    const res = await apiFetch('/users/me', { method: 'PATCH', body: JSON.stringify({ timezone: tz }) })
+    authStore.setUser(await res.json())
+  } catch (e) {
+    errorMsg.value = describeError(e, 'change timezone')
+  }
+}
+
+onMounted(async () => {
+  store.fetchEntries()
+  // Pick up the server's timezone for sessions cached before it existed.
+  try {
+    const res = await apiFetch('/users/me')
+    authStore.setUser(await res.json())
+  } catch {}
+})
 
 async function submit() {
   const { type, data } = metricFields.value.collect()
@@ -223,6 +248,15 @@ async function exportDb() {
 .journal-title {
   font-family: 'Lora', serif; font-size: 22px;
   font-weight: 400; font-style: italic;
+}
+.tz-select {
+  max-width: 11rem;
+  font-size: 0.75rem;
+  background: none;
+  color: inherit;
+  border: 1px solid var(--color-border, currentColor);
+  border-radius: 4px;
+  opacity: 0.7;
 }
 .journal-date {
   font-family: 'DM Mono', monospace; font-size: 11px;

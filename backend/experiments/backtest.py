@@ -16,12 +16,11 @@ O(n^2) instead of O(n).
 """
 from collections import defaultdict
 from datetime import datetime
-from zoneinfo import ZoneInfo
 
 from app.predictor.features import build_candidates
 from app.predictor.config import PHASE_CUTOFF, MIN_PHASE_SUPPORT
 
-LOCAL_TZ = ZoneInfo("America/New_York")
+from app.timeutil import DEFAULT_TZ as LOCAL_TZ
 
 TOP_K = 3
 

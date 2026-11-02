@@ -9,8 +9,8 @@ from app import models
 from app.predictor.features import get_session_aggregates, build_candidates
 from app.predictor.mixer import weight_candidates, apply_miss_only_update, DEFAULT_WEIGHTS
 from app.predictor.config import FEATURE_ORDER, FEATURE_SIGNATURE, CONFIG_VERSION
+from app.timeutil import DEFAULT_TZ
 
-LOCAL_TZ = ZoneInfo("America/New_York")
 STALE_CUTOFF = timedelta(minutes=45)
 
 # Reserved key inside the persisted weights JSON. Holds the FEATURE_SIGNATURE
@@ -20,7 +20,9 @@ STALE_CUTOFF = timedelta(minutes=45)
 SIGNATURE_KEY = "_feature_signature"
 
 # In-memory per-user cache of the expensive aggregate computation, keyed by
-# user_id -> {"aggregates": ..., "day": date}. Single-process assumption —
+# user_id -> {"aggregates": ..., "day": date, "tz": zone key}. The zone is part
+# of the key because the same instant is a different local day in different
+# zones. Single-process assumption —
 # fine for one backend replica; would need something like Redis if this ever
 # runs multi-process/horizontally scaled.
 _aggregate_cache: dict[int, dict] = {}
@@ -44,16 +46,16 @@ def _event_lock(user_id: int) -> asyncio.Lock:
     return lock
 
 
-async def _get_aggregates(db: AsyncSession, user_id: int, now: datetime):
-    today = now.astimezone(LOCAL_TZ).date()
+async def _get_aggregates(db: AsyncSession, user_id: int, now: datetime, tz: ZoneInfo):
+    today = now.astimezone(tz).date()
     cached = _aggregate_cache.get(user_id)
-    if cached and cached["day"] == today:
+    if cached and cached["day"] == today and cached["tz"] == tz.key:
         return cached["aggregates"]
 
     generation = _cache_generation.get(user_id, 0)
-    aggregates = await get_session_aggregates(db, user_id, now)
+    aggregates = await get_session_aggregates(db, user_id, now, tz=tz)
     if _cache_generation.get(user_id, 0) == generation:
-        _aggregate_cache[user_id] = {"aggregates": aggregates, "day": today}
+        _aggregate_cache[user_id] = {"aggregates": aggregates, "day": today, "tz": tz.key}
     return aggregates
 
 
@@ -81,7 +83,7 @@ async def _get_weights(db: AsyncSession, user_id: int) -> dict:
 
 async def predict(
     db: AsyncSession, user_id: int, last_exercise: str | None = None,
-    now: datetime | None = None,
+    now: datetime | None = None, tz: ZoneInfo = DEFAULT_TZ,
 ) -> list[str]:
     """The one thing routers call to get a ranking. Reuses cached aggregates
     within the same day, and updates today's still-open prediction event in
@@ -89,8 +91,8 @@ async def predict(
     this can get hit once per keystroke from a search box."""
     started = perf_counter()
     now = now or datetime.now(timezone.utc)
-    aggregates = await _get_aggregates(db, user_id, now)
-    candidates = build_candidates(aggregates, last_exercise, now)
+    aggregates = await _get_aggregates(db, user_id, now, tz)
+    candidates = build_candidates(aggregates, last_exercise, now, tz=tz)
     if not candidates:
         return []
 

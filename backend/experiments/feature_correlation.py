@@ -18,9 +18,8 @@ import numpy as np
 from app.predictor.features import build_candidates
 from app.predictor.config import FEATURE_ORDER, PHASE_CUTOFF, MIN_PHASE_SUPPORT
 from experiments.run import load_entries
-from zoneinfo import ZoneInfo
 
-LOCAL_TZ = ZoneInfo("America/New_York")
+from app.timeutil import DEFAULT_TZ as LOCAL_TZ
 
 
 async def main(email: str):

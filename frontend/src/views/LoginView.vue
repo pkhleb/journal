@@ -43,6 +43,7 @@
 </template>
 
 <script setup>
+import { browserTimeZone } from '../utils/timezone'
 import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
@@ -148,7 +149,7 @@ async function submit() {
       const res = await fetch('/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.value, username: username.value, password: password.value })
+        body: JSON.stringify({ email: email.value, username: username.value, password: password.value, timezone: browserTimeZone() })
       })
       if (!res.ok) {
         const data = await res.json()

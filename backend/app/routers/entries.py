@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 import json
 from datetime import date
 from app.predictor import service as predictor
+from app.timeutil import user_tz
 
 router = APIRouter(prefix="/api")
 
@@ -233,4 +234,4 @@ async def get_ranked_exercises(
     Returns:
         list[str]: Ranked exercise names ordered by the predictor score.
     """
-    return await predictor.predict(db, current_user.id, last_exercise)
+    return await predictor.predict(db, current_user.id, last_exercise, tz=user_tz(current_user))

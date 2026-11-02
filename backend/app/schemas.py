@@ -1,4 +1,5 @@
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, model_validator, field_validator
+from app.timeutil import is_valid_timezone
 from typing import Optional
 from datetime import date, datetime
 
@@ -6,12 +7,31 @@ class UserCreate(BaseModel):
         email: EmailStr
         username: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9]+$")
         password: str
+        timezone: Optional[str] = None
+
+        @field_validator("timezone")
+        @classmethod
+        def _check_timezone(cls, v):
+                if v is not None and not is_valid_timezone(v):
+                        raise ValueError("unknown IANA timezone")
+                return v
+
+class UserUpdate(BaseModel):
+        timezone: str
+
+        @field_validator("timezone")
+        @classmethod
+        def _check_timezone(cls, v):
+                if not is_valid_timezone(v):
+                        raise ValueError("unknown IANA timezone")
+                return v
 
 class UserOut(BaseModel):
         id: int
         email: str
         created_at: datetime
         is_admin: bool
+        timezone: str
         class Config:
                 from_attributes = True
 
