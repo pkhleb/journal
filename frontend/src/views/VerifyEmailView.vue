@@ -20,7 +20,7 @@
 </template>
 
 <script setup>
-import { ref, } from 'vue'
+import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 
 const route = useRoute()
@@ -102,7 +102,7 @@ async function verify() {
   transition: background 0.12s;
 }
 .submit-btn:hover { background: var(--color-bg); }
-.submit-btn:disbled { opacity: 0.5; cursor: not-allowed; }
+.submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .back-link {
   display: block;
   text-align: center;
